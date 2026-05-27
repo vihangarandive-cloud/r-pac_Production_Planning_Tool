@@ -1,0 +1,15 @@
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="liveToast" class="card shadow rounded-4 border-0 overflow-hidden" role="alert" aria-live="assertive"
+    aria-atomic="true" style="width: 350px; display: none;">
+    <div className="card-body p-3 flex items-center space-x-3">
+      <div class="bg-amber-100 text-amber-600 p-2 rounded-lg">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+      </div>
+      <div class="flex-1">
+        <h6 class="mb-0 fw-bold small">System Notification</h6>
+        <p class="mb-0 text-muted small" id="alertMessage"></p>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,56 @@
+
+@{
+    ViewBag.Title = "Role Permissions";
+}
+
+<div class="card border-0 shadow-sm rounded-4">
+    <div class="card-header bg-white border-bottom p-4">
+        <h6 class="mb-0 fw-bold">System Roles</h6>
+    </div>
+    <div class="card-body p-0">
+        <table class="table mb-0">
+            <thead class="table-light">
+                <tr class="text-secondary small fw-black uppercase tracking-widest">
+                    <th class="ps-4 py-3">Role Name</th>
+                    <th class="py-3">Permissions Level</th>
+                    <th class="py-3 text-center">Users</th>
+                    <th class="py-3 text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="hover-row">
+                    <td class="ps-4 font-bold">Admin</td>
+                    <td>Full System Control</td>
+                    <td class="text-center font-bold text-rpac-blue">1</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-light border p-2 rounded-3"><i class="bi bi-pencil"></i></button>
+                    </td>
+                </tr>
+                <tr class="hover-row">
+                    <td class="ps-4 font-bold">Planner</td>
+                    <td>Production & Scheduling</td>
+                    <td class="text-center font-bold text-rpac-blue">2</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-light border p-2 rounded-3"><i class="bi bi-pencil"></i></button>
+                    </td>
+                </tr>
+                <tr class="hover-row">
+                    <td class="ps-4 font-bold">Supervisor</td>
+                    <td>Shop Floor Tracking</td>
+                    <td class="text-center font-bold text-rpac-blue">3</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-light border p-2 rounded-3"><i class="bi bi-pencil"></i></button>
+                    </td>
+                </tr>
+                <tr class="hover-row">
+                    <td class="ps-4 font-bold">Management</td>
+                    <td>Read-only Reporting</td>
+                    <td class="text-center font-bold text-rpac-blue">2</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-light border p-2 rounded-3"><i class="bi bi-pencil"></i></button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

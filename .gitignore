@@ -1,0 +1,33 @@
+## Visual Studio / .NET
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS generated directories
+.vs/
+
+# Build outputs
+bin/
+obj/
+
+# NuGet packages (restore on build)
+packages/
+!packages/build/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+## Node / Web
+node_modules/
+build/
+dist/
+coverage/
+.env*
+!.env.example

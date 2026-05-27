@@ -1,0 +1,701 @@
+@model IEnumerable<RPACProductionPlanner.Models.ProductionOrder>
+@{
+    ViewBag.Title = "Production Scheduler";
+    var machines = ViewBag.Machines as IEnumerable<RPACProductionPlanner.Models.MachineResource>;
+    var kpis = ViewBag.KPIs as RPACProductionPlanner.Models.KPISummary;
+    var departments = new List<string> { "PFL", "RFID", "Thermal", "Heat Transfer", "Offset", "Flexo", "Digital" };
+    departments.Sort();
+    // Start timeline 2 days in the past to show previous days' history
+    var startDate = DateTime.Today.AddDays(-2);
+    var hoursCount = 24 * 21; 
+    var hourWidth = 70; 
+    
+    var userRole = RPACProductionPlanner.Helpers.SessionHelper.UserRole;
+    bool isManager = userRole != null && userRole.Equals("Manager", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="scheduler-enterprise-container animate-fade-in d-flex flex-column bg-white" style="height: calc(100vh - 100px); font-family: 'Inter', sans-serif;">
+    
+    <!-- Enterprise Header -->
+    <div class="border-bottom p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex align-items-center gap-3"><div>
+                    <h1 class="h5 fw-bold mb-0 text-dark">Production Schedule</h1>
+                    <p class="text-xxs text-muted mb-0 fw-semibold">Planning Board - Gantt Version</p>
+                </div>
+            </div>
+            <div class="d-flex gap-2">
+                @if (isManager) {
+                    <div class="text-xxs fw-black text-slate-400 uppercase tracking-widest border border-slate-200 rounded-pill px-3 py-1 bg-slate-50">
+                        <i class="bi bi-eye-fill me-1"></i> Read Only View
+                    </div>
+                } else {
+                    <div id="saveStatus" class="text-xxs fw-bold text-success d-none align-items-center me-3">
+                        <i class="bi bi-cloud-check-fill me-1"></i> SAP Connected
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- KPI Row -->
+        <div class="row g-2 mb-3">
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Work Orders</div><div class="h6 fw-black mb-0">@(kpis != null ? kpis.TotalOrders.ToString("N0") : "0")</div></div></div>
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Completed</div><div class="h6 fw-black mb-0">@(kpis != null ? kpis.CompletedOrders.ToString("N0") : "0")</div></div></div>
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Active</div><div class="h6 fw-black mb-0">@(kpis != null ? kpis.ActiveOrders.ToString("N0") : "0")</div></div></div>
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Late Orders</div><div class="h6 fw-black mb-0 text-danger">@(kpis != null ? kpis.UrgentOrders.ToString("N0") : "0")</div></div></div>
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Equip. Util</div><div class="h6 fw-black mb-0">64%</div></div></div>
+            <div class="col"><div class="bg-light p-2 rounded-2 border shadow-xs h-100 text-center"><div class="text-xxs text-muted fw-bold uppercase mb-1">Labor Util</div><div class="h6 fw-black mb-0">36%</div></div></div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="d-flex align-items-end gap-3 flex-wrap">
+            <div class="filter-item">
+                <label class="text-xxs fw-bold text-muted uppercase mb-1 d-block">Department</label>
+                <select id="deptFilter" onchange="onDeptFilterChange()" class="form-select form-select-sm x-small fw-bold border-slate-300" style="width: 160px;">
+                    <option value="">All Departments</option>
+                    @foreach(var dept in departments) {
+                        <option value="@dept" @(ViewBag.CurrentDept == dept ? "selected" : "")>@dept</option>
+                    }
+                </select>
+            </div>
+            <div class="filter-item">
+                <label class="text-xxs fw-bold text-muted uppercase mb-1 d-block">Search</label>
+                <input type="text" id="searchInput" onkeyup="applyFilters()" class="form-control form-control-sm x-small fw-bold border-slate-300" placeholder="Order Code..." style="width: 140px;">
+            </div>
+            <div class="d-flex gap-1 ms-auto">
+                <button onclick="zoomToToday()" class="btn btn-light btn-sm x-small fw-bold border border-slate-300">Today</button>
+                <button onclick="location.reload()" class="btn btn-light btn-sm x-small fw-bold border border-slate-300">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="flex-grow-1 d-flex overflow-hidden p-3 bg-light gap-3">
+        
+        <!-- SIDEBAR: Unplanned Orders -->
+        <div class="unplanned-bin bg-white border rounded-2 shadow-sm d-flex flex-column" style="width: 280px;">
+            <div class="p-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+                <span class="text-xxs fw-bold text-dark uppercase">Unplanned Orders</span>
+                <span class="badge bg-dark rounded-pill x-small" id="unplannedCount">0</span>
+            </div>
+            <div class="flex-grow-1 overflow-auto p-2" id="unplannedContainer">
+                @if (Model != null) {
+                    var unplanned = Model.Where(x => (x.MachineId ?? 0) == 0 || x.PlannedStart == null).Take(100);
+                    foreach (var o in unplanned) {
+                        string dept = (o.Department ?? "").Trim();
+                        <div class="unplanned-card p-3 bg-white border rounded shadow-sm mb-2 cursor-grab draggable-source" 
+                             draggable="true" ondragstart="handleDragStart(event)"
+                             data-code="@o.OrderCode" data-qty="@o.Quantity" data-dept="@dept" data-item="@o.ProductName">
+                            <div class="d-flex justify-content-between align-items-center mb-1 pointer-events-none">
+                                <span class="fw-bold text-dark" style="font-size: 0.85rem;">@o.OrderCode</span>
+                                <span class="badge bg-light text-dark border">@o.Quantity.ToString("N0")</span>
+                            </div>
+                            <div class="small text-muted text-truncate pointer-events-none" title="@o.ProductName">@o.ProductName</div>
+                        </div>
+                    }
+                    if (Model.Count(x => (x.MachineId ?? 0) == 0 || x.PlannedStart == null) > 100) {
+                        <div class="p-2 text-center text-muted small border-top">
+                            Showing first 100 unplanned orders...
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- CENTER: Gantt Board -->
+        <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+            <div class="bg-white border rounded-2 shadow-sm d-flex flex-grow-1 overflow-hidden" id="boardFrame">
+                <!-- Resource Labels -->
+                <div class="flex-shrink-0 border-end bg-white sticky-left" style="width: 150px; z-index: 100;">
+                    <div class="border-bottom bg-light" style="height: 35px;"></div>
+                    <div class="labels-scroll">
+                        @foreach (var m in machines) {
+                            <div class="p-2 border-bottom d-flex flex-column justify-content-center fw-bold text-dark x-small uppercase machine-label @(m.Status != "Available" ? "bg-danger bg-opacity-10" : "")" 
+                                 data-machine-id="@m.MachineId" style="height: 60px;">
+                                <div class="truncate-text">@m.MachineName</div>
+                                @if (m.Status != "Available") {
+                                    <div class="text-danger fw-black" style="font-size: 0.5rem;"><i class="bi bi-exclamation-triangle-fill"></i> BREAKDOWN</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                <!-- Timeline Grid -->
+                <div class="flex-grow-1 overflow-auto" id="mainBoardWrapper">
+                    <div class="d-flex flex-column" style="width: @(hoursCount * hourWidth)px;">
+                        <div class="d-flex flex-shrink-0 bg-light border-bottom sticky-top" style="height: 35px; z-index: 50;">
+                            @for (int i = 0; i < hoursCount; i++) {
+                                var hour = startDate.AddHours(i);
+                                var isNewDay = hour.Hour == 0;
+                                <div class="flex-shrink-0 border-end text-center d-flex flex-column justify-content-center @(isNewDay ? "bg-white border-start border-slate-300" : "")" style="width: @(hourWidth)px;">
+                                    @if(isNewDay || i == 0) { <span class="fw-bold text-muted" style="font-size: 0.55rem;">@hour.ToString("MMM dd")</span> }
+                                    <span class="text-muted" style="font-size: 0.5rem;">@hour.ToString("HH:mm")</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="position-relative" id="dropzone">
+                            @foreach (var m in machines) {
+                                <div class="d-flex border-bottom timeline-row position-relative @(m.Status != "Available" ? "breakdown-row" : "")" 
+                                     data-machine-id="@m.MachineId" data-dept="@m.Department"
+                                     ondragover="handleDragOver(event)" ondrop="handleDrop(event)"
+                                     style="height: 60px; background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px); background-size: @(hourWidth)px 100%;">
+                                     @if (m.Status != "Available") {
+                                         <div class="w-100 h-100 d-flex align-items-center justify-content-center position-absolute top-0 start-0 pointer-events-none" style="background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(225, 29, 72, 0.05) 10px, rgba(225, 29, 72, 0.05) 20px); opacity: 0.5;">
+                                             <span class="text-danger fw-black uppercase tracking-widest" style="font-size: 0.6rem; opacity: 0.5;">Maintenance Mode</span>
+                                         </div>
+                                     }
+                                     <!-- Orders for this machine will be appended here -->
+                                </div>
+                            }
+                            <div id="ordersLayer" class="position-absolute top-0 start-0 w-100 h-100" style="pointer-events: none;"></div>
+                            <!-- Current Time Indicator Line -->
+                            <div id="nowLine" class="position-absolute h-100 border-start border-danger border-2" style="top:0; width:0; z-index: 80; pointer-events: none; display: none;">
+                                <div class="bg-danger text-white px-2 py-1 rounded-pill position-absolute" style="top: -10px; left: -40px; font-size: 0.5rem; font-weight: 900; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                    NOW
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- BOTTOM: Dispatch List removed -->
+        </div>
+    </div>
+
+    <!-- SO Details Side Panel -->
+    <div id="boardDetailPanel" class="bg-white border-start shadow-lg transition-all position-fixed top-0 end-0 h-100" style="width: 350px; display: none; z-index: 3000;">
+        <div class="p-3 bg-dark text-white d-flex justify-content-between align-items-center">
+            <span class="fw-black x-small uppercase tracking-widest">SO Details</span>
+            <button onclick="closeBoardDetails()" class="btn btn-link text-white p-0"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div id="boardDetailContent" class="p-4 overflow-auto" style="height: calc(100% - 60px);"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script>
+        let currentOrders = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model));
+        const hourWidth = @hourWidth;
+        const baseDate = new Date('@startDate.ToString("yyyy-MM-ddTHH:mm:ss")');
+        const isManager = @(isManager ? "true" : "false");
+
+        $(document).ready(function () {
+            // Prevent browser from restoring scroll position on refresh
+            if ('scrollRestoration' in history) {
+                history.scrollRestoration = 'manual';
+            }
+            
+            renderGantt();
+            if (!isManager) initInteractions();
+            applyFilters();
+            
+            $('#mainBoardWrapper').on('scroll', function() { 
+                $('.labels-scroll').scrollTop($(this).scrollTop()); 
+            });
+            
+            // Auto-focus to current time - runs inside ready so DOM exists
+            zoomToToday();
+            setTimeout(zoomToToday, 500);
+            
+            // Keep the 'Now' line moving every minute
+            setInterval(updateNowLine, 60000);
+
+            $(document).on('click', '.unschedule-btn', function(e) {
+                e.stopPropagation();
+                if (confirm('Are you sure you want to remove this order from the schedule?')) {
+                    unscheduleOrder($(this).attr('data-code'));
+                }
+            });
+        });
+
+        function applyFilters() {
+            const dept = ($('#deptFilter').val() || "").trim().toUpperCase();
+            const search = ($('#searchInput').val() || "").trim().toUpperCase();
+            
+            // 1. Sidebar Cards
+            let unplannedVisible = 0;
+            $('.unplanned-card').each(function() {
+                const cardDept = ($(this).attr('data-dept') || "").trim().toUpperCase();
+                const cardCode = ($(this).attr('data-code') || "").trim().toUpperCase();
+                const visible = (dept === "" || cardDept === dept) && (search === "" || cardCode.includes(search));
+                $(this).toggleClass('d-none', !visible);
+                if(visible) unplannedVisible++;
+            });
+            $('#unplannedCount').text(unplannedVisible);
+
+            // 2. Machines (Rows)
+            $('.timeline-row').each(function() {
+                const machineDept = ($(this).attr('data-dept') || "").trim().toUpperCase();
+                const machineVisible = (dept === "" || machineDept === dept);
+                if (machineVisible) {
+                    $(this).removeClass('d-none').addClass('d-flex');
+                } else {
+                    $(this).removeClass('d-flex').addClass('d-none');
+                }
+                
+                const mid = $(this).attr('data-machine-id');
+                const label = $(`.machine-label[data-machine-id="${mid}"]`);
+                if (machineVisible) {
+                    label.removeClass('d-none').addClass('d-flex');
+                } else {
+                    label.removeClass('d-flex').addClass('d-none');
+                }
+            });
+
+            // Re-render blocks
+            renderGantt();
+            
+            // 3. Board Blocks (Filter rendered blocks)
+            $('.gantt-block').each(function() {
+                const blockCode = ($(this).attr('data-code') || "").trim().toUpperCase();
+                const visible = (search === "" || blockCode.includes(search));
+                $(this).toggleClass('d-none', !visible);
+            });
+        }
+
+        function onDeptFilterChange() {
+            const dept = $('#deptFilter').val() || "";
+            const url = new URL(window.location.href);
+            if (dept) {
+                url.searchParams.set('dept', dept);
+            } else {
+                url.searchParams.delete('dept');
+            }
+            window.location.href = url.toString();
+        }
+
+        function renderGantt() {
+            if(!currentOrders) return;
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+            
+            // Clear existing blocks from all rows
+            $('.timeline-row .gantt-block').remove();
+            
+            // Group blocks by MachineId to batch DOM insertions
+            const machineBlocks = {};
+            
+            currentOrders.forEach((o, i) => {
+                if (!o.MachineId || o.MachineId === 0 || !o.PlannedStart) return;
+                
+                const start = new Date(o.PlannedStart);
+                const end = o.PlannedEnd ? new Date(o.PlannedEnd) : new Date(start.getTime() + (4 * 60 * 60 * 1000));
+                
+                const diffHours = (start - baseDate) / (1000 * 60 * 60);
+                const durationHours = (end - start) / (1000 * 60 * 60);
+                
+                if(diffHours < -48 || diffHours > @hoursCount) return;
+
+                const left = diffHours * hourWidth;
+                const width = Math.max(30, durationHours * hourWidth); 
+                const color = colors[i % 5];
+
+                const blockHtml = `<div class="gantt-block position-absolute shadow-sm d-flex flex-column justify-content-center px-2" 
+                            draggable="true" ondragstart="handleDragStart(event)"
+                            style="left: ${left}px; top: 10px; width: ${width}px; height: 40px; background: ${color}; 
+                                   border-radius: 6px; cursor: move; pointer-events: auto; z-index: 100; user-select: none;"
+                            data-code="${o.OrderCode}" onclick="showBoardDetails('${o.OrderCode}')">
+                            <div class="text-white fw-bold truncate-text mb-0 pointer-events-none" style="font-size: 0.75rem; line-height: 1;">${o.OrderCode}</div>
+                            <div class="text-white opacity-75 truncate-text mt-1 pointer-events-none" style="font-size: 0.6rem; line-height: 1;">${o.Quantity.toLocaleString()} PCS</div>
+                            
+                            <!-- Resize Handle -->
+                            <div class="resize-handle position-absolute end-0 top-0 h-100" 
+                                 style="width: 10px; cursor: col-resize; z-index: 101; border-right: 2px solid rgba(255,255,255,0.5);"
+                                 onmousedown="startResize(event, '${o.OrderCode}')"></div>
+                         </div>`;
+                
+                if (!machineBlocks[o.MachineId]) {
+                    machineBlocks[o.MachineId] = [];
+                }
+                machineBlocks[o.MachineId].push(blockHtml);
+            });
+            
+            // Render all blocks in a single operation per machine row
+            Object.keys(machineBlocks).forEach(machineId => {
+                const row = $(`.timeline-row[data-machine-id="${machineId}"]`);
+                if (row.length) {
+                    row.append(machineBlocks[machineId].join(''));
+                }
+            });
+            
+            updateNowLine();
+        }
+
+        function updateNowLine() {
+            const now = new Date();
+            const diffHours = (now - baseDate) / (1000 * 60 * 60);
+            
+            if (diffHours >= 0 && diffHours <= @hoursCount) {
+                const left = diffHours * hourWidth;
+                $('#nowLine').css({ left: left + 'px' }).show();
+            } else {
+                $('#nowLine').hide();
+            }
+        }
+
+        function initInteractions() {
+            // InteractJS removed entirely. Using robust Vanilla JS below.
+        }
+
+        // Snapping Helper Functions to align blocks end-to-end and eliminate machine down time
+        function roundTo10Minutes(date) {
+            const ms = 1000 * 60 * 10;
+            return new Date(Math.round(date.getTime() / ms) * ms);
+        }
+
+        function getSnappedTimes(code, machineId, proposedStart, proposedEnd) {
+            let proposedStartMs = proposedStart.getTime();
+            let proposedEndMs = proposedEnd.getTime();
+            
+            let order = currentOrders.find(o => o.OrderCode == code);
+            let durationMs = proposedEndMs - proposedStartMs;
+            if (order && order.PlannedStart && order.PlannedEnd) {
+                durationMs = new Date(order.PlannedEnd).getTime() - new Date(order.PlannedStart).getTime();
+            }
+            
+            const mid = parseInt(machineId);
+            const siblings = currentOrders.filter(o => 
+                o.MachineId === mid && 
+                o.OrderCode != code && 
+                o.PlannedStart && 
+                o.PlannedEnd
+            );
+            
+            const thresholdMs = 1.5 * 60 * 60 * 1000; // 1.5 hours snapping threshold
+            let bestDiff = Infinity;
+            let bestSnapStart = null;
+            let bestSnapEnd = null;
+            
+            siblings.forEach(sib => {
+                const sibStart = new Date(sib.PlannedStart).getTime();
+                const sibEnd = new Date(sib.PlannedEnd).getTime();
+                
+                // Case 1: Proposed start is near sibling's end
+                const diffStartNearEnd = Math.abs(proposedStartMs - sibEnd);
+                if (diffStartNearEnd < thresholdMs && diffStartNearEnd < bestDiff) {
+                    bestDiff = diffStartNearEnd;
+                    bestSnapStart = new Date(sibEnd);
+                    bestSnapEnd = new Date(sibEnd + durationMs);
+                }
+                
+                // Case 2: Proposed end is near sibling's start
+                const diffEndNearStart = Math.abs(proposedEndMs - sibStart);
+                if (diffEndNearStart < thresholdMs && diffEndNearStart < bestDiff) {
+                    bestDiff = diffEndNearStart;
+                    bestSnapEnd = new Date(sibStart);
+                    bestSnapStart = new Date(sibStart - durationMs);
+                }
+            });
+            
+            if (bestSnapStart && bestSnapEnd) {
+                return { start: bestSnapStart, end: bestSnapEnd, snapped: true };
+            }
+            return { start: proposedStart, end: proposedEnd, snapped: false };
+        }
+
+        function getSnappedResizeEnd(code, machineId, start, proposedEnd) {
+            const proposedEndMs = proposedEnd.getTime();
+            
+            const mid = parseInt(machineId);
+            const siblings = currentOrders.filter(o => 
+                o.MachineId === mid && 
+                o.OrderCode != code && 
+                o.PlannedStart && 
+                o.PlannedEnd
+            );
+            
+            const thresholdMs = 1.5 * 60 * 60 * 1000; // 1.5 hours snapping threshold
+            let bestDiff = Infinity;
+            let bestSnapEnd = null;
+            
+            siblings.forEach(sib => {
+                const sibStart = new Date(sib.PlannedStart).getTime();
+                
+                // Check if proposed end is near sibling's start
+                const diffEndNearStart = Math.abs(proposedEndMs - sibStart);
+                if (diffEndNearStart < thresholdMs && diffEndNearStart < bestDiff) {
+                    bestDiff = diffEndNearStart;
+                    bestSnapEnd = new Date(sibStart);
+                }
+            });
+            
+            if (bestSnapEnd) {
+                return bestSnapEnd;
+            }
+            
+            return roundTo10Minutes(proposedEnd);
+        }
+
+        // Make HTML5 drag functions globally available
+        window.handleDragStart = function(event) {
+            if (isManager) return;
+            const code = event.target.getAttribute('data-code');
+            event.dataTransfer.setData('text/plain', code);
+            event.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => $(event.target).addClass('opacity-50 border-primary'), 10);
+            console.log("Dragging: " + code);
+        };
+
+        window.handleDragOver = function(event) {
+            if (isManager) return;
+            event.preventDefault(); 
+            event.dataTransfer.dropEffect = 'move';
+        };
+
+        window.handleDrop = function(event) {
+            if (isManager) return;
+            event.preventDefault();
+            
+            const code = event.dataTransfer.getData('text/plain');
+            if (!code) return;
+            
+            $(`.unplanned-card[data-code="${code}"]`).removeClass('opacity-50 border-primary');
+            
+            const row = $(event.target).closest('.timeline-row');
+            if (!row.length) return;
+            
+            const machineId = row.attr('data-machine-id');
+            const wrapper = $('#mainBoardWrapper');
+            const wrapperRect = wrapper[0].getBoundingClientRect();
+            
+            const gridX = event.clientX - wrapperRect.left + wrapper.scrollLeft();
+            const newHourOffset = gridX / hourWidth;
+            const rawStartTime = new Date(baseDate.getTime() + (newHourOffset * 60 * 60 * 1000));
+            
+            let durationMs = 4 * 60 * 60 * 1000; // Default 4 hours
+            let order = currentOrders.find(o => o.OrderCode == code);
+            if (order && order.PlannedStart && order.PlannedEnd) {
+                durationMs = new Date(order.PlannedEnd).getTime() - new Date(order.PlannedStart).getTime();
+            }
+            const rawEndTime = new Date(rawStartTime.getTime() + durationMs);
+            
+            // Snap proposed times to nearest adjacent order on same machine
+            const snapResult = getSnappedTimes(code, machineId, rawStartTime, rawEndTime);
+            let finalStartTime = snapResult.start;
+            let finalEndTime = snapResult.end;
+            
+            if (!snapResult.snapped) {
+                finalStartTime = roundTo10Minutes(finalStartTime);
+                finalEndTime = new Date(finalStartTime.getTime() + durationMs);
+            }
+            
+            console.log(`Dropped ${code} onto Machine ${machineId}. Snapped: ${snapResult.snapped}, Start: ${finalStartTime}, End: ${finalEndTime}`);
+            
+            updateLocalOrder(code, machineId, finalStartTime, finalEndTime);
+            saveChange(code, machineId, finalStartTime.toISOString(), finalEndTime.toISOString(), order ? order.Priority : 'Medium');
+            
+            $(`.unplanned-card[data-code="${code}"]`).fadeOut(300, function() { $(this).remove(); });
+            renderGantt();
+            applyFilters();
+        };
+        
+        // --- Native Vanilla JS Resizer ---
+        window.startResize = function(event, code) {
+            if (isManager) return;
+            event.preventDefault();
+            event.stopPropagation(); // Prevent dragStart
+            
+            const block = $(event.target).closest('.gantt-block');
+            const startX = event.clientX;
+            const startWidth = block.width();
+            
+            $(document).on('mousemove.resize', function(e) {
+                const newWidth = Math.max(30, startWidth + (e.clientX - startX));
+                block.css('width', newWidth + 'px');
+            });
+            
+            $(document).on('mouseup.resize', function(e) {
+                $(document).off('mousemove.resize');
+                $(document).off('mouseup.resize');
+                
+                const finalWidth = block.width();
+                const durationHours = finalWidth / hourWidth;
+                
+                const order = currentOrders.find(o => o.OrderCode == code);
+                if(order) {
+                    const start = new Date(order.PlannedStart);
+                    let end = new Date(start.getTime() + (durationHours * 60 * 60 * 1000));
+                    
+                    // Snap the resized end to next order's start
+                    end = getSnappedResizeEnd(code, order.MachineId, start, end);
+                    
+                    updateLocalOrder(code, order.MachineId, start, end);
+                    saveChange(code, order.MachineId, start.toISOString(), end.toISOString(), order.Priority);
+                    renderGantt();
+                }
+            });
+        };
+
+        function findMachineAtY(y) {
+            let found = null;
+            $('.timeline-row:visible').each(function() {
+                const top = $(this).position().top;
+                if (y >= top && y <= top + 60) {
+                    found = $(this);
+                    return false;
+                }
+            });
+            return found;
+        }
+
+        function updateLocalOrder(code, machineId, start, end) {
+            let order = currentOrders.find(o => o.OrderCode == code);
+            if (order) {
+                order.MachineId = parseInt(machineId);
+                order.PlannedStart = start;
+                order.PlannedEnd = end;
+            } else {
+                const card = $(`.unplanned-card[data-code="${code}"]`);
+                currentOrders.push({
+                    OrderCode: code,
+                    MachineId: parseInt(machineId),
+                    PlannedStart: start,
+                    PlannedEnd: end,
+                    Quantity: parseInt(card.attr('data-qty')),
+                    Department: card.attr('data-dept'),
+                    ProductName: card.attr('data-item'),
+                    Priority: 'Medium'
+                });
+            }
+        }
+
+        function saveChange(orderCode, machineId, startTime, endTime, priority) {
+            $("#saveStatus").removeClass('d-none').addClass('d-flex').html('<i class="bi bi-cloud-upload-fill animate-pulse me-1"></i> Syncing...');
+            
+            const token = $('input[name="__RequestVerificationToken"]').val();
+            
+            $.post('@Url.Action("UpdatePlanning", "ProductionOrder")', { 
+                __RequestVerificationToken: token,
+                orderCode: orderCode, 
+                machineId: machineId, 
+                startTime: startTime, 
+                endTime: endTime, 
+                priority: priority 
+            }, function(res) {
+                if(res.success) {
+                    $("#saveStatus").html('<i class="bi bi-cloud-check-fill me-1"></i> SAP Connected').addClass('text-success');
+                } else {
+                    $("#saveStatus").html('<i class="bi bi-exclamation-triangle-fill me-1"></i> Sync Error').removeClass('text-success').addClass('text-danger');
+                }
+            }).fail(function() {
+                $("#saveStatus").html('<i class="bi bi-exclamation-triangle-fill me-1"></i> Network Error').removeClass('text-success').addClass('text-danger');
+            });
+        }
+
+        // Expose globally so the 'Today' button HTML onclick can call it
+        window.zoomToToday = function() {
+            const wrapper = document.getElementById('mainBoardWrapper');
+            if (!wrapper) return;
+            const now = new Date();
+            const todayOffset = (now - baseDate) / (1000 * 60 * 60);
+            if (todayOffset > 0) {
+                wrapper.scrollLeft = (todayOffset * hourWidth) - 400;
+            }
+        };
+        
+        // Alias for internal use
+        function zoomToToday() { window.zoomToToday(); }
+
+        function solveSchedule() {
+            $('#btnSolve').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Solving...');
+            $.post('@Url.Action("Solve", "Scheduler")', function(res) { location.reload(); });
+        }
+
+        function showBoardDetails(code) {
+            const order = currentOrders.find(o => (o.OrderCode || "").toString() == code.toString());
+            if (!order) return;
+            $("#boardDetailPanel").show();
+            $("#boardDetailContent").html(`
+                <div class="space-y-4">
+                    <div class="mb-3">
+                        <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Status</label>
+                        <div class="small fw-bold border-bottom pb-2 text-dark">${order.Status || 'nan'}</div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Priority Level</label>
+                            <select id="detailPriority" class="form-select x-small fw-bold border-rpac-red border-opacity-25 bg-light bg-opacity-50">
+                                <option value="Urgent" ${order.Priority === 'Urgent' ? 'selected' : ''}>URGENT</option>
+                                <option value="High" ${order.Priority === 'High' ? 'selected' : ''}>HIGH</option>
+                                <option value="Medium" ${order.Priority === 'Medium' ? 'selected' : ''}>MEDIUM</option>
+                                <option value="Low" ${order.Priority === 'Low' ? 'selected' : ''}>LOW</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Assign Machine</label>
+                            <select id="detailMachine" class="form-select x-small fw-bold border-rpac-red border-opacity-25 bg-light bg-opacity-50">
+                                @foreach (var m in (ViewBag.Machines as IEnumerable<RPACProductionPlanner.Models.MachineResource>)) {
+                                    <option value="@m.MachineId" ${order.MachineId == @m.MachineId ? 'selected' : ''}>@m.MachineName</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Qty</label>
+                            <div class="small fw-bold text-dark">${parseInt(order.Quantity || 0).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Product</label>
+                        <div class="small fw-bold border-bottom pb-2 text-dark">${order.ProductName}</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-xxs fw-black text-muted uppercase tracking-widest d-block mb-1">Customer</label>
+                        <div class="small fw-bold border-bottom pb-2 text-dark">${order.CustomerName || 'Direct Order'}</div>
+                    </div>
+                    <button onclick="savePlanningChanges('${order.OrderCode}')" class="btn btn-dark w-100 fw-black x-small py-3 rounded-3 shadow-sm hover-shadow mt-3">
+                        <i class="bi bi-save2 me-2"></i> UPDATE PLANNING
+                    </button>
+                    <button onclick="unscheduleOrder('${order.OrderCode}')" class="btn btn-outline-danger w-100 fw-bold x-small py-2 rounded-3 mt-2">
+                        <i class="bi bi-trash me-2"></i> REMOVE FROM SCHEDULE
+                    </button>
+                </div>
+            `);
+        }
+
+        function savePlanningChanges(orderCode) {
+            const machineId = $("#detailMachine").val();
+            const priority = $("#detailPriority").val();
+            const order = currentOrders.find(o => o.OrderCode == orderCode);
+            const startTime = order.PlannedStart instanceof Date ? order.PlannedStart.toISOString() : order.PlannedStart;
+            const endTime = order.PlannedEnd instanceof Date ? order.PlannedEnd.toISOString() : order.PlannedEnd;
+
+            saveChange(orderCode, machineId, startTime, endTime, priority);
+            closeBoardDetails();
+            renderGantt();
+        }
+
+        function closeBoardDetails() { $("#boardDetailPanel").hide(); }
+
+        function unscheduleOrder(orderCode) {
+            if(!confirm("Remove this order from the production schedule?")) return;
+            $("#saveStatus").removeClass('d-none').addClass('d-flex').html('<i class="bi bi-cloud-upload-fill animate-pulse me-1"></i> Syncing...');
+            
+            const token = $('input[name="__RequestVerificationToken"]').val();
+            
+            $.post('@Url.Action("Unschedule", "ProductionOrder")', { 
+                __RequestVerificationToken: token,
+                orderCode: orderCode 
+            }, function(res) {
+                if(res.success) {
+                    $("#saveStatus").html('<i class="bi bi-cloud-check-fill me-1"></i> SAP Connected').addClass('text-success');
+                    location.reload();
+                } else {
+                    $("#saveStatus").html('<i class="bi bi-exclamation-triangle-fill me-1"></i> Sync Error').removeClass('text-success').addClass('text-danger');
+                }
+            }).fail(function() {
+                $("#saveStatus").html('<i class="bi bi-exclamation-triangle-fill me-1"></i> Network Error').removeClass('text-success').addClass('text-danger');
+            });
+        }
+    </script>
+    <style>
+        .draggable-source { touch-action: none; user-select: none; transition: transform 0.1s; }
+        .sticky-left { position: sticky; left: 0; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        .labels-scroll::-webkit-scrollbar { display: none; }
+        .gantt-block { transition: opacity 0.2s, border 0.2s; position: relative; }
+        .animate-pulse { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+    </style>
+}

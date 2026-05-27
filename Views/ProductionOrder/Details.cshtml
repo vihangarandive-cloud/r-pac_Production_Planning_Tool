@@ -1,0 +1,174 @@
+@model RPACProductionPlanner.Models.ProductionOrder
+@{
+    ViewBag.Title = "Order Details: #" + Model.OrderCode;
+    var userRole = RPACProductionPlanner.Helpers.SessionHelper.UserRole;
+    bool isManager = userRole != null && userRole.Equals("Manager", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="container-fluid py-4">
+    <!-- Header Area -->
+    <div class="d-flex justify-content-between align-items-end mb-4 border-bottom pb-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1 small">
+                    <li class="breadcrumb-item"><a href="@Url.Action("Index", "ProductionOrder")" class="text-decoration-none">Planning Portal</a></li>
+                    <li class="breadcrumb-item active">Order Details</li>
+                </ol>
+            </nav>
+            <h2 class="fw-bold mb-0">Order #@Model.OrderCode</h2>
+        </div>
+        <div class="d-flex gap-2">
+            <button onclick="window.print()" class="btn btn-outline-secondary btn-sm fw-bold">
+                <i class="bi bi-printer me-1"></i> Print Ticket
+            </button>
+            @if (!isManager) {
+                <a href="@Url.Action("Index", "Scheduler")" class="btn btn-primary btn-sm fw-bold">
+                    <i class="bi bi-calendar-range me-1"></i> Open Scheduler
+                </a>
+            }
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start mb-4">
+                        <div>
+                            <span class="badge bg-secondary mb-2">@Model.Department</span>
+                            <h4 class="fw-bold mb-1">@Model.ProductName</h4>
+                            <p class="text-muted small mb-0">Customer: @(Model.CustomerName ?? "Direct Order")</p>
+                        </div>
+                        <div class="text-end">
+                            <label class="d-block small text-muted fw-bold text-uppercase mb-1">Current Status</label>
+                            <span class="badge bg-danger rounded-pill px-3 py-2">@Model.Status</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="text-muted small fw-bold d-block mb-1">Target Quantity</label>
+                                <div class="h4 fw-bold mb-0">@Model.Quantity.ToString("N0") <span class="fs-6 fw-normal">PCS</span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="text-muted small fw-bold d-block mb-1">Sales Order</label>
+                                <div class="h5 fw-bold mb-0 text-truncate">@Model.SalesOrderNo</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded bg-light">
+                                <label class="text-muted small fw-bold d-block mb-1">Priority</label>
+                                <div class="h5 fw-bold @((Model.Priority ?? "").ToUpper() == "URGENT" ? "text-danger" : "text-primary") mb-0">
+                                    <i class="bi bi-flag-fill me-1"></i> @(Model.Priority ?? "Normal")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h5 class="fw-bold mb-3 border-bottom pb-2">Production Timeline</h5>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded">
+                                <label class="text-muted small fw-bold d-block mb-1">Planned Start</label>
+                                <div class="fw-bold">@(Model.PlannedStart.HasValue ? Model.PlannedStart.Value.ToString("dd MMM yyyy, HH:mm") : "Pending")</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 border rounded">
+                                <label class="text-muted small fw-bold d-block mb-1">Estimated Completion</label>
+                                <div class="fw-bold">@(Model.PlannedEnd.HasValue ? Model.PlannedEnd.Value.ToString("dd MMM yyyy, HH:mm") : "Not Calculated")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="fw-bold mb-2">Production Notes</label>
+                        <textarea id="orderNotes" class="form-control border shadow-none" rows="5" placeholder="Add internal notes here...">@Model.Notes</textarea>
+                        <div class="text-end mt-2">
+                            <button onclick="saveNotes()" id="btnSaveNotes" class="btn btn-danger fw-bold px-4">
+                                <i class="bi bi-save me-1"></i> Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm border mb-4">
+                <div class="card-header bg-light py-3">
+                    <h6 class="mb-0 fw-bold">Resource Allocation</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="small text-muted fw-bold d-block mb-2 text-uppercase">Assigned Machine</label>
+                        <div class="d-flex align-items-center p-3 border rounded">
+                            <div class="bg-dark text-white p-2 rounded me-3">
+                                <i class="bi bi-cpu fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">@(Model.MachineName ?? "Not Assigned")</div>
+                                <div class="small text-muted">ID: @(Model.MachineId > 0 ? "MC-" + Model.MachineId.Value.ToString("D3") : "N/A")</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold d-block mb-2 text-uppercase">Executive in Charge</label>
+                        <div class="d-flex align-items-center p-3 border rounded">
+                            <div class="bg-primary text-white p-2 rounded me-3">
+                                <i class="bi bi-person fs-4"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">@(Model.EmployeeName ?? "Pending")</div>
+                                <div class="small text-muted">Operational Lead</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info border-0 small mb-0 mt-4">
+                        <i class="bi bi-info-circle me-2"></i> All changes are logged for auditing. Data synced from SAP B1.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@Html.AntiForgeryToken()
+
+<script>
+    function saveNotes() {
+        const notes = $("#orderNotes").val();
+        const code = "@Model.OrderCode";
+        const btn = $("#btnSaveNotes");
+        const token = $('input[name="__RequestVerificationToken"]').val();
+
+        btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Saving...');
+
+        $.post('@Url.Action("UpdateNotes", "ProductionOrder")', { 
+            orderCode: code, 
+            notes: notes,
+            __RequestVerificationToken: token
+        }, function(res) {
+            if(res.success) {
+                btn.html('<i class="bi bi-check2-circle me-2"></i> Saved!').removeClass('btn-rpac-red').addClass('btn-success');
+                setTimeout(() => {
+                    btn.prop('disabled', false).html('<i class="bi bi-save2 me-2"></i> Save Notes').removeClass('btn-success').addClass('btn-rpac-red');
+                }, 2000);
+            } else {
+                alert("Error saving notes: " + (res.message || "Unknown error"));
+                btn.prop('disabled', false).html('<i class="bi bi-save2 me-2"></i> Save Notes');
+            }
+        });
+    }
+</script>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,351 @@
+@model RPACProductionPlanner.Models.KPISummary
+@{
+    ViewBag.Title = "Dashboard";
+}
+
+<div class="animate-fade-in">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h4 fw-black mb-1 text-black tracking-tight">Production Dashboard</h1>
+            <p class="text-muted x-small mb-0 fw-semibold uppercase tracking-widest">RPac Operations Overview |
+                @DateTime.Now.ToString("dd MMM HH:mm") </p>
+        </div>
+    </div>
+
+    <!-- KPI Section -->
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="bg-primary bg-opacity-10 text-primary p-2 rounded-3">
+                            <i class="bi bi-activity fs-4"></i>
+                        </div>
+                        <span class="text-danger x-small fw-bold uppercase tracking-tighter">@Model.UrgentOrders
+                            Critical</span>
+                    </div>
+                    <div class="display-5 fw-bold text-slate-900 mb-1">@Model.TotalOrders</div>
+                    <div class="text-muted x-small fw-bold text-uppercase tracking-widest">Managed Tickets</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="bg-success bg-opacity-10 text-success p-2 rounded-3">
+                            <i class="bi bi-check2-circle fs-4"></i>
+                        </div>
+                        <span class="text-success x-small fw-bold uppercase tracking-tighter">Target 98%</span>
+                    </div>
+                    <div class="display-5 fw-bold text-slate-900 mb-1 tracking-tighter">
+                        @Model.OnTimeDeliveryRate.ToString("0.0")%</div>
+                    <div class="text-muted x-small fw-bold text-uppercase tracking-widest">OTD Performance</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="bg-warning bg-opacity-10 text-warning p-2 rounded-3">
+                            <i class="bi bi-boxes fs-4"></i>
+                        </div>
+                        <span class="text-warning x-small fw-bold uppercase tracking-tighter">@Model.LowStockCount Low
+                            Stock</span>
+                    </div>
+                    <div class="display-5 fw-bold text-slate-900 mb-1">@Model.LowStockCount</div>
+                    <div class="text-muted x-small fw-bold text-uppercase tracking-widest">Action Required</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="bg-info bg-opacity-10 text-info p-2 rounded-3">
+                            <i class="bi bi-lightning-charge fs-4"></i>
+                        </div>
+                        <span class="text-danger x-small fw-bold uppercase tracking-tighter">
+                            @(Model.TotalMachines - Model.MachinesActive) Offline
+                        </span>
+                    </div>
+                    <div class="display-5 fw-bold text-slate-900 mb-1">@Model.MachinesActive/@Model.TotalMachines</div>
+                    <div class="text-muted x-small fw-bold text-uppercase tracking-widest">Asset Utilization</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Section -->
+    <div class="row g-4">
+        <!-- Live Stream -->
+        <div class="col-lg-8">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-header bg-transparent border-0 p-4 pb-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold text-slate-900 tracking-tight"
+                            style="letter-spacing: -0.05px;">Machine Status Matrix</h5>
+                        <div class="d-flex align-items-center gap-2 text-success" style="opacity: 0.85;">
+                            <i class="bi bi-circle-fill text-success"
+                                style="font-size: 0.5rem; animation: pulse 2s infinite;"></i>
+                            <span class="x-small fw-bold uppercase tracking-widest text-success">Live Syncing</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        @{
+                            var machines = ViewBag.Machines as IEnumerable<RPACProductionPlanner.Models.MachineResource>;
+                            // Find max capacity to scale bars relatively — Math.Max(1,...) avoids a bare if that Razor can't parse
+                            int maxCap = (machines != null && machines.Any()) ? Math.Max(1, machines.Max(x => x.CapacityPerShift)) : 1;
+                        }
+                        @if (machines != null)
+                        {
+                            foreach (var m in machines)
+                            {
+                                // Map every known status value to a color
+                                string badgeClass, badgeLabel, barColor;
+                                switch ((m.Status ?? "Unknown").ToLower())
+                                {
+                                    case "available":
+                                        badgeClass = "bg-success bg-opacity-10 text-success";
+                                        badgeLabel = "Available";
+                                        barColor   = "bg-success";
+                                        break;
+                                    case "in use":
+                                    case "inuse":
+                                        badgeClass = "bg-primary bg-opacity-10 text-primary";
+                                        badgeLabel = "In Use";
+                                        barColor   = "bg-primary";
+                                        break;
+                                    case "maintenance":
+                                        badgeClass = "bg-warning bg-opacity-10 text-warning";
+                                        badgeLabel = "Maintenance";
+                                        barColor   = "bg-warning";
+                                        break;
+                                    default: // breakdown, offline, unknown
+                                        badgeClass = "bg-danger bg-opacity-10 text-danger";
+                                        badgeLabel = "Breakdown";
+                                        barColor   = "bg-danger";
+                                        break;
+                                }
+                                // Utilisation bar: relative to the highest-capacity machine in the list
+                                int utilPct = (int)Math.Round((m.CapacityPerShift / (double)maxCap) * 100.0);
+
+                                <div class="col-md-4">
+                                    <div class="card border border-slate-200 rounded-3 shadow-none h-100 p-3 bg-white"
+                                        style="border-radius: 8px;">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <span class="text-xxs fw-bold text-slate-400 uppercase tracking-widest"
+                                                style="font-size: 0.65rem;">@m.Department</span>
+                                            <span class="badge rounded-pill @badgeClass x-small fw-bold px-2 py-1 uppercase tracking-widest">
+                                                @badgeLabel
+                                            </span>
+                                        </div>
+                                        <h5 class="fw-bold text-slate-900 mb-1 tracking-tight fs-5">@m.MachineName</h5>
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="badge bg-light text-muted x-small border-0 fw-bold uppercase">Cap: @m.CapacityPerShift/shift</span>
+                                            <span class="text-xxs fw-bold text-slate-500">@m.CapacityPerHour/hr</span>
+                                        </div>
+                                        <div class="progress mt-auto"
+                                            style="height: 4px; border-radius: 2px; background-color: #f1f5f9;">
+                                            <div class="progress-bar @barColor" role="progressbar"
+                                                style="width: @utilPct%; border-radius: 2px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Distribution -->
+        <div class="col-lg-4">
+            <div class="card border-1 rounded-5 h-100 hover-shadow transition-all overflow-hidden bg-white">
+                <div class="card-header bg-transparent border-0 p-4 pb-0">
+                    <h5 class="mb-0 fw-bold text-slate-900 tracking-tight">Workload State</h5>
+                </div>
+                <div class="card-body p-4 pt-0">
+                    <div id="statusChartContainer" style="height: 260px; width: 100%;"></div>
+                    <div class="mt-8 row g-2">
+                        <div class="col-6">
+                            <div class="p-2 border border-slate-100 rounded-3 d-flex justify-content-between align-items-center bg-white shadow-xs">
+                                <span class="text-xxs fw-bold text-slate-700 d-flex align-items-center"><i class="bi bi-circle-fill text-danger me-2" style="font-size: 0.5rem;"></i>Urgent</span>
+                                <span class="text-xxs fw-semibold text-slate-500">@Model.UrgentOrders Tickets</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border border-slate-100 rounded-3 d-flex justify-content-between align-items-center bg-white shadow-xs">
+                                <span class="text-xxs fw-bold text-slate-700 d-flex align-items-center"><i class="bi bi-circle-fill text-success me-2" style="font-size: 0.5rem;"></i>Completed</span>
+                                <span class="text-xxs fw-semibold text-slate-500">@Model.CompletedOrders Tickets</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border border-slate-100 rounded-3 d-flex justify-content-between align-items-center bg-white shadow-xs">
+                                <span class="text-xxs fw-bold text-slate-700 d-flex align-items-center"><i class="bi bi-circle-fill text-primary me-2" style="font-size: 0.5rem;"></i>Active</span>
+                                <span class="text-xxs fw-semibold text-slate-500">@Model.ActiveOrders Tickets</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 border border-slate-100 rounded-3 d-flex justify-content-between align-items-center bg-white shadow-xs">
+                                <span class="text-xxs fw-bold text-slate-700 d-flex align-items-center"><i class="bi bi-circle-fill text-secondary me-2" style="font-size: 0.5rem;"></i>Planned</span>
+                                <span class="text-xxs fw-semibold text-slate-500">@Model.PlannedOrders Tickets</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- End of Content -->
+</div>
+
+@section scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            Highcharts.chart('statusChartContainer', {
+                chart: {
+                    type: 'pie',
+                    backgroundColor: 'transparent',
+                    custom: {},
+                    events: {
+                        render() {
+                            const chart = this,
+                                series = chart.series[0];
+                            let customLabel = chart.options.chart.custom.label;
+
+                            if (!customLabel) {
+                                customLabel = chart.options.chart.custom.label =
+                                    chart.renderer.label(
+                                        '<div style="text-align: center; font-family: \'Inter\', sans-serif;">' +
+                                        '<span style="font-size: 0.65rem; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 0.15em">Total Orders</span><br/>' +
+                                        '<span style="font-size: 2rem; color: #0f172a; font-weight: 900; letter-spacing: -1px;">@Model.TotalOrders</span>' +
+                                        '</div>',
+                                        0, 0, null, null, null, true
+                                    )
+                                        .css({
+                                            color: '#000',
+                                            textAnchor: 'middle'
+                                        })
+                                        .add();
+                            }
+
+                            const x = series.center[0] + chart.plotLeft - (customLabel.getBBox().width / 2),
+                                y = series.center[1] + chart.plotTop - (customLabel.getBBox().height / 2);
+
+                            customLabel.attr({ x, y });
+                        }
+                    }
+                },
+                title: { text: null },
+                credits: { enabled: false },
+                tooltip: {
+                    headerFormat: '',
+                    pointFormat: '<span style="color:{point.color}">\u25CF</span> <b>{point.name}</b><br/>' +
+                        'Tickets: <b>{point.y}</b> ({point.percentage:.1f}%)'
+                },
+                legend: { enabled: false },
+                plotOptions: {
+                    pie: {
+                        innerSize: '75%',
+                        borderWidth: 0,
+                        borderRadius: 15,
+                        allowPointSelect: true,
+                        cursor: 'pointer',
+                        dataLabels: {
+                            enabled: false
+                        },
+                        showInLegend: true,
+                        colors: ['#e11d48', '#1e3a8a', '#10b981', '#94a3b8']
+                    }
+                },
+                series: [{
+                    name: 'Status',
+                    data: [
+                        { name: 'Urgent',    y: @Model.UrgentOrders },
+                        { name: 'Active',    y: @Model.ActiveOrders },
+                        { name: 'Completed', y: @Model.CompletedOrders },
+                        { name: 'Planned',   y: @Model.PlannedOrders }
+                    ]
+                }]
+            });
+        });
+
+        // Real-time Updates via SSE
+        const eventSource = new EventSource('@Url.Action("StreamUpdates", "RealTime")');
+        eventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'schedule_update') {
+                console.log('Real-time update received:', data);
+                // Highlight the updated order or refresh KPIs
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'info',
+                    title: 'Schedule updated live!',
+                    showConfirmButton: false,
+                    timer: 3000
+                });
+                
+                // Optional: Refresh the page or specific component
+                // For a true "WOW" effect, you would refresh only the affected card
+                setTimeout(() => location.reload(), 2000); 
+            }
+        };
+
+        function syncSAP(event) {
+            const btn = event.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin me-2"></i> Syncing...';
+            btn.disabled = true;
+
+            $.post('@Url.Action("SyncSAP", "ProductionOrder")', function (res) {
+                if (res.success) {
+                    location.reload();
+                } else {
+                    alert("Sync failed. Please check SAP B1 connection.");
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            });
+        }
+    </script>
+    <style>
+        @@keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @@keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+    </style>
+}

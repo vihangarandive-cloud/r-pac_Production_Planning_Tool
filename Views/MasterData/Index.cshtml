@@ -1,0 +1,487 @@
+@{
+    ViewBag.Title = "Master Data Center";
+    var machines = ViewBag.Machines as IEnumerable<RPACProductionPlanner.Models.MachineResource>;
+    var inventory = ViewBag.Inventory as IEnumerable<RPACProductionPlanner.Models.InventoryItem>;
+    
+    var userRole = RPACProductionPlanner.Helpers.SessionHelper.UserRole;
+    bool isManager = userRole != null && userRole.Equals("Manager", StringComparison.OrdinalIgnoreCase);
+}
+
+<div class="animate-fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 fw-black mb-1 text-slate-900 tracking-tight">Master Data Management</h1>
+            <p class="text-muted x-small mb-0 fw-semibold uppercase tracking-widest">Manage Machines and Inventory | @DateTime.Now.ToString("dd MMM HH:mm")</p>
+        </div>
+        @if (!isManager) {
+            <div class="d-flex gap-2">
+                <button onclick="syncMasterData(event)" class="btn btn-white border shadow-sm x-small fw-black text-uppercase tracking-widest px-4 py-2 rounded-3 hover-shadow transition-all">
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync SAP Data
+                </button>
+            </div>
+        }
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+        <div class="card-header bg-white border-0 p-0">
+            <ul class="nav nav-tabs nav-fill border-0" id="masterTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active py-3 border-0 x-small fw-black text-uppercase tracking-widest transition-all rounded-0" id="machines-tab" data-bs-toggle="tab" data-bs-target="#machines" type="button" role="tab">
+                        <i class="bi bi-cpu me-2"></i> Machine Resources
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link py-3 border-0 x-small fw-black text-uppercase tracking-widest transition-all rounded-0" id="bom-tab" data-bs-toggle="tab" data-bs-target="#bom" type="button" role="tab">
+                        <i class="bi bi-box-seam me-2"></i>Inventory
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="masterTabsContent">
+        <!-- Machines Section -->
+        <div class="tab-pane fade show active" id="machines" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+                <div class="card-header bg-transparent border-0 p-4 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">Production Machine Registry</h5>
+                    @if (!isManager) {
+                        <button class="btn btn-rpac-red text-black x-small fw-black text-uppercase tracking-widest px-4 py-2 rounded-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#addMachineModal">
+                            <i class="bi bi-plus-lg me-2"></i> Register New Machine
+                        </button>
+                    }
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr class="text-xxs fw-black text-uppercase tracking-widest text-muted border-bottom">
+                                <th class="ps-4 py-3">Code</th>
+                                <th class="py-3">Machine Name</th>
+                                <th class="py-3">Department</th>
+                                <th class="py-3 text-center">Shift Capacity</th>
+                                <th class="py-3">Current Status</th>
+                                <th class="py-3 text-end pe-4">Controls</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (machines != null) {
+                                foreach (var m in machines) {
+                                    <tr class="border-bottom">
+                                        <!-- System View ID: v2.1 -->
+                                        <td class="ps-4">
+                                            <span class="badge rounded-2 fw-black px-2 py-1" style="min-width: 60px; background-color: #0f172a !important; color: #ffffff !important; display: inline-block;">
+                                                @(string.IsNullOrWhiteSpace(m.MachineCode) ? "M-SYS" : m.MachineCode.Trim().ToUpper())
+                                            </span>
+                                        </td>
+                                        <td class="fw-bold text-slate-800">@m.MachineName</td>
+                                        <td class="x-small fw-bold text-muted">@m.Department</td>
+                                        <td class="text-center fw-black text-slate-900">@m.CapacityPerShift.ToString("N0") <span class="text-muted x-small fw-normal">u/s</span></td>
+                                        <td>
+                                            @{
+                                                string statusColor = m.Status == "Available" ? "success" : "danger";
+                                            }
+                                            <span class="badge bg-@statusColor bg-opacity-10 text-@statusColor rounded-pill x-small fw-black text-uppercase tracking-widest px-3 py-1">@m.Status.ToUpper()</span>
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            @if (!isManager) {
+                                                <div class="d-flex justify-content-end gap-2">
+                                                    <button onclick="toggleMachineStatus('@m.MachineCode')" class="btn btn-@(m.Status == "Available" ? "outline-danger" : "outline-success") btn-sm border-0 rounded-3 hover-shadow" title="Report @(m.Status == "Available" ? "Breakdown" : "Available")">
+                                                        <i class="bi bi-exclamation-triangle-fill"></i>
+                                                    </button>
+                                                    <button onclick="openEditMachineModal('@m.MachineName', '@m.MachineCode', '@m.Department', @m.CapacityPerShift)" class="btn btn-light btn-sm border-0 rounded-3 hover-shadow">
+                                                        <i class="bi bi-pencil-square text-dark"></i>
+                                                    </button>
+                                                </div>
+                                            } else {
+                                                <span class="text-muted x-small italic fw-bold">View Only</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOM / Inventory Section -->
+        <div class="tab-pane fade" id="bom" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+                <div class="card-header bg-transparent border-0 p-4 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">BOM Stock & Requirements</h5>
+                    @if (!isManager) {
+                        <button class="btn btn-rpac-blue text-white x-small fw-black text-uppercase tracking-widest px-4 py-2 rounded-3 shadow-sm" onclick="openAddItemModal()">
+                            <i class="bi bi-plus-lg me-2"></i> Add New Item
+                        </button>
+                    }
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr class="text-xxs fw-black text-uppercase tracking-widest text-muted border-bottom">
+                                <th class="ps-4 py-3">Item Identity</th>
+                                <th class="py-3">Description</th>
+                                <th class="py-3 text-center">Available Stock</th>
+                                <th class="py-3 text-center">Threshold</th>
+                                <th class="py-3">Health</th>
+                                <th class="py-3 text-end pe-4">Controls</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (inventory != null) {
+                                foreach (var item in inventory) {
+                                    <tr class="border-bottom">
+                                        <td class="ps-4 py-3">
+                                            <div class="fw-black text-slate-900 small">@item.ItemCode</div>
+                                            <div class="text-xxs text-muted fw-bold">CAT-@item.Category.Substring(0, 3).ToUpper()</div>
+                                        </td>
+                                        <td>
+                                            <div class="fw-bold text-slate-800 small">@item.ItemName</div>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="h6 mb-0 fw-black text-primary">@item.QuantityOnHand.ToString("N0")</div>
+                                            <div class="text-xxs text-muted fw-bold">@item.UnitOfMeasure</div>
+                                        </td>
+                                        <td class="text-center">
+                                            <div class="small fw-black text-slate-500">@item.ReorderLevel</div>
+                                        </td>
+                                        <td>
+                                            <span class="badge @(item.QuantityOnHand <= item.ReorderLevel ? "bg-danger" : "bg-success") bg-opacity-10 @(item.QuantityOnHand <= item.ReorderLevel ? "text-danger" : "text-success") rounded-pill x-small fw-black text-uppercase tracking-widest px-3 py-1">
+                                                @(item.QuantityOnHand <= item.ReorderLevel ? "LOW STOCK" : "OPTIMAL")
+                                            </span>
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            @if (!isManager) {
+                                                <button onclick="openUpdateStockModal(@item.ItemId, '@item.ItemCode', @item.QuantityOnHand)" class="btn btn-light btn-sm border-0 rounded-3 hover-shadow">
+                                                    <i class="bi bi-box-seam text-dark"></i>
+                                                </button>
+                                            } else {
+                                                <span class="text-muted x-small italic fw-bold">View Only</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Modals {
+    <!-- Add Machine Modal -->
+    <div class="modal fade" id="addMachineModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 p-4 pb-0">
+                    <h5 class="fw-black tracking-tight">Register New Machine</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="@Url.Action("AddMachine", "MasterData")" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Machine Name</label>
+                            <input type="text" name="MachineName" class="form-control fw-bold" placeholder="e.g. Flexo Press 01" required />
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Machine Code</label>
+                                <input type="text" name="MachineCode" class="form-control fw-bold" placeholder="F-01" required />
+                            </div>
+                            <div class="col-6">
+                                <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Department</label>
+                                <select name="Department" class="form-select fw-bold" required>
+                                    <option value="Thermal">Thermal</option>
+                                    <option value="Flexo">Flexo</option>
+                                    <option value="PFL">PFL</option>
+                                    <option value="Heat Transfer">Heat Transfer</option>
+                                    <option value="RFID">RFID</option>
+                                    <option value="Offset">Offset</option>
+                                    <option value="Digital">Digital</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Capacity Per Shift</label>
+                            <input type="number" name="CapacityPerShift" class="form-control fw-bold" placeholder="50000" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-4 pt-0">
+                        <button type="button" class="btn btn-light rounded-3 px-4 x-small fw-black text-uppercase tracking-widest" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-rpac-red text-black rounded-3 px-4 x-small fw-black text-uppercase tracking-widest">Register Machine</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Machine Modal -->
+    <div class="modal fade" id="editMachineModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 p-4 pb-0">
+                    <h5 class="fw-black tracking-tight">Modify Machine Entity</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="@Url.Action("UpdateMachine", "MasterData")" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Machine Name</label>
+                            <input type="text" id="edit_MachineName" name="MachineName" class="form-control fw-bold" required />
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Machine Code</label>
+                                <input type="text" id="edit_MachineCode" name="MachineCode" class="form-control bg-light fw-bold" readonly />
+                            </div>
+                            <div class="col-6">
+                                <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Department</label>
+                                <select id="edit_Department" name="Department" class="form-select fw-bold" required>
+                                    <option value="Thermal">Thermal</option>
+                                    <option value="Flexo">Flexo</option>
+                                    <option value="PFL">PFL</option>
+                                    <option value="Heat Transfer">Heat Transfer</option>
+                                    <option value="RFID">RFID</option>
+                                    <option value="Offset">Offset</option>
+                                    <option value="Digital">Digital</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Capacity Per Shift</label>
+                            <input type="number" id="edit_Capacity" name="CapacityPerShift" class="form-control fw-bold" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 p-4 pt-0">
+                        <button type="button" class="btn btn-light rounded-3 px-4 x-small fw-black text-uppercase tracking-widest" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-rpac-red text-black rounded-3 px-4 x-small fw-black text-uppercase tracking-widest shadow-sm">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Stock Modal (BOM) -->
+    <div class="modal fade" id="updateStockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-0 p-4 pb-0">
+                    <h5 class="fw-black text-slate-900">Update BOM Stock Level</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Item Code</label>
+                        <input type="text" id="modalItemCode" class="form-control bg-light border-0 fw-bold" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Adjust Quantity</label>
+                        <input type="number" id="modalNewQuantity" class="form-control border fw-black" placeholder="Enter new quantity">
+                    </div>
+                    <input type="hidden" id="modalItemId">
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light x-small fw-black text-uppercase tracking-widest" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" onclick="submitStockUpdate(event)" class="btn btn-rpac-blue text-white x-small fw-black text-uppercase tracking-widest px-4">Update Stock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Item Modal (BOM) -->
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg rounded-4">
+                <div class="modal-header border-0 p-4 pb-0">
+                    <h5 class="fw-black text-slate-900">Add New BOM Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Item Code</label>
+                            <input type="text" id="add_ItemCode" class="form-control border fw-bold" placeholder="MAT000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Category</label>
+                            <select id="add_Category" class="form-select border fw-bold">
+                                <option value="Raw Material">Raw Material</option>
+                                <option value="Consumable">Consumable</option>
+                                <option value="Packaging">Packaging</option>
+                                <option value="Finished Good">Finished Good</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Item Name / Description</label>
+                            <input type="text" id="add_ItemName" class="form-control border fw-bold" placeholder="e.g. Flexo Cyan Ink">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Initial Stock</label>
+                            <input type="number" id="add_Quantity" class="form-control border fw-bold" value="0">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">Safety Level</label>
+                            <input type="number" id="add_Reorder" class="form-control border fw-bold" value="100">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="text-xxs fw-black uppercase tracking-widest text-muted mb-2">UOM</label>
+                            <input type="text" id="add_UOM" class="form-control border fw-bold" value="PCS">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light x-small fw-black text-uppercase tracking-widest" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" onclick="submitAddItem(event)" class="btn btn-rpac-blue text-white x-small fw-black text-uppercase tracking-widest px-4">Save Item</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section scripts {
+    <script>
+        let editMachineModal, stockModal, addItemModal;
+
+        $(document).ready(function() {
+            editMachineModal = new bootstrap.Modal(document.getElementById('editMachineModal'));
+            stockModal = new bootstrap.Modal(document.getElementById('updateStockModal'));
+            addItemModal = new bootstrap.Modal(document.getElementById('addItemModal'));
+            
+            // Activate tab based on hash
+            if(window.location.hash) {
+                const tab = new bootstrap.Tab(document.querySelector(`button[data-bs-target="${window.location.hash}"]`));
+                tab.show();
+            }
+        });
+
+        function openEditMachineModal(name, code, dept, capacity) {
+            $('#edit_MachineName').val(name);
+            $('#edit_MachineCode').val(code);
+            $('#edit_Department').val(dept);
+            $('#edit_Capacity').val(capacity);
+            editMachineModal.show();
+        }
+
+        function openAddItemModal() {
+            addItemModal.show();
+        }
+
+        function submitAddItem(event) {
+            const item = {
+                ItemCode: $('#add_ItemCode').val(),
+                ItemName: $('#add_ItemName').val(),
+                Category: $('#add_Category').val(),
+                QuantityOnHand: $('#add_Quantity').val(),
+                ReorderLevel: $('#add_Reorder').val(),
+                UnitOfMeasure: $('#add_UOM').val(),
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            };
+
+            if (!item.ItemCode || !item.ItemName) {
+                Swal.fire('Error', 'Item Code and Name are required.', 'error');
+                return;
+            }
+
+            const btn = $(event.currentTarget);
+            btn.prop('disabled', true).text('Saving...');
+
+            $.post('@Url.Action("AddBOMItem", "MasterData")', item)
+                .done(function (res) {
+                    if (res.success) {
+                        location.reload();
+                    } else {
+                        Swal.fire('Error', res.message, 'error');
+                        btn.prop('disabled', false).text('Save Item');
+                    }
+                });
+        }
+
+        function openUpdateStockModal(id, code, currentQty) {
+            $('#modalItemId').val(id);
+            $('#modalItemCode').val(code);
+            $('#modalNewQuantity').val(currentQty);
+            stockModal.show();
+        }
+
+        function submitStockUpdate(event) {
+            const id = $('#modalItemId').val();
+            const qty = $('#modalNewQuantity').val();
+            const btn = $(event.currentTarget);
+            
+            btn.prop('disabled', true).text('Updating...');
+
+            $.post('@Url.Action("UpdateStock", "MasterData")', { 
+                itemId: id, 
+                newQuantity: qty,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            })
+            .done(function (res) {
+                if (res.success) {
+                    location.reload();
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                    btn.prop('disabled', false).text('Update Stock');
+                }
+            });
+        }
+
+        function toggleMachineStatus(code) {
+            const btn = $(event.currentTarget);
+            
+            $.post('@Url.Action("ToggleMachineStatus", "MasterData")', { 
+                machineCode: code,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            })
+            .done(function (res) {
+                if (res.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Status Updated',
+                        text: res.message,
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => location.reload());
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                }
+            });
+        }
+
+        function syncMasterData(event) {
+            const btn = $(event.currentTarget);
+            const originalHtml = btn.html();
+            btn.html('<i class="bi bi-arrow-repeat animate-spin me-2"></i> Syncing...').prop('disabled', true);
+
+            $.post('@Url.Action("SyncSAP", "MasterData")', {
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            })
+            .done(function (res) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Synchronized!',
+                    text: res.message,
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => location.reload());
+            })
+            .fail(() => {
+                btn.html(originalHtml).prop('disabled', false);
+                Swal.fire('Error', 'Communication failure.', 'error');
+            });
+        }
+    </script>
+    <style>
+        .nav-tabs .nav-link { color: #64748b; background: #f8fafc; border-bottom: 1px solid #e2e8f0 !important; }
+        .nav-tabs .nav-link.active { color: #0f172a; background: #fff; border-bottom: 3px solid #e11d48 !important; font-weight: 900 !important; }
+        .nav-tabs .nav-link:hover:not(.active) { background: #f1f5f9; }
+        @@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; display: inline-block; }
+    </style>
+}

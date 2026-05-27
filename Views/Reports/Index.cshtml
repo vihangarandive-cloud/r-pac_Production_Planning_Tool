@@ -1,0 +1,225 @@
+@{
+    ViewBag.Title = "Analytics Hub";
+    long totalThroughput = ViewBag.TotalThroughput != null ? (long)ViewBag.TotalThroughput : 0;
+    int totalOrders      = ViewBag.TotalOrders     != null ? (int)ViewBag.TotalOrders     : 0;
+    int activeOrders     = ViewBag.ActiveOrders    != null ? (int)ViewBag.ActiveOrders    : 0;
+    int overdueOrders    = ViewBag.OverdueOrders   != null ? (int)ViewBag.OverdueOrders   : 0;
+    double otdRate       = ViewBag.OtdRate         != null ? (double)ViewBag.OtdRate      : 0.0;
+}
+
+<div class="animate-fade-in">
+
+    <!-- Header Banner -->
+    <div class="row g-1 mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-5 overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-lg-7 mb-3 mb-lg-0">
+                            <h2 class="text-white fw-black mb-1 tracking-tight">Intelligence &amp; Insights</h2>
+                            <p class="text-white-50 mb-2 fw-medium opacity-75" style="font-size:0.85rem;">
+                                Live production metrics | Auto-Refreshes every 60 seconds.
+                            </p>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge rounded-pill px-3 py-2" style="background:rgba(16,185,129,0.2);color:#34d399;font-size:0.65rem;font-weight:700;">
+                                    <i class="bi bi-circle-fill me-1" style="font-size:0.4rem;"></i> LIVE DATA
+                                </span>
+                                <span class="text-white-50" style="font-size:0.72rem;">
+                                    Last synced: <span id="lastSyncTime">@DateTime.Now.ToString("HH:mm:ss")</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-lg-5 text-lg-end">
+                            <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                                <button onclick="refreshAnalytics()" id="btnRefresh"
+                                    class="btn btn-outline-light border-opacity-25 px-3 py-2 rounded-3 fw-black x-small text-uppercase tracking-widest transition-all">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Refresh
+                                </button>
+                                <a href="@Url.Action("ExportProductionSchedule", "Reports")"
+                                    class="btn btn-rpac-red text-black px-3 py-2 rounded-3 fw-black x-small text-uppercase tracking-widest shadow-sm transition-all">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export Schedule
+                                </a>
+                                <a href="@Url.Action("ExportInventory", "Reports")"
+                                    class="btn btn-outline-light border-opacity-25 px-3 py-2 rounded-3 fw-black x-small text-uppercase tracking-widest transition-all">
+                                    <i class="bi bi-box-seam me-1"></i> Export Inventory
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100" style="border-left:4px solid #2563eb !important;">
+                <h6 class="text-muted x-small fw-black uppercase tracking-widest mb-1">Total Throughput</h6>
+                <div class="h3 fw-black mb-0" id="kpiThroughput">
+                    @totalThroughput.ToString("N0") <span class="text-muted x-small fw-normal">pcs</span>
+                </div>
+                <div class="text-muted x-small fw-bold mt-2">Last 6 months</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100" style="border-left:4px solid #10b981 !important;">
+                <h6 class="text-muted x-small fw-black uppercase tracking-widest mb-1">OTD Efficiency</h6>
+                <div class="h3 fw-black mb-0" id="kpiOtd">@otdRate.ToString("F1")%</div>
+                <div id="kpiOtdLabel" class="x-small fw-bold mt-2 @(otdRate >= 90 ? "text-success" : "text-warning")">
+                    @(otdRate >= 90 ? "Above target" : "Below target")
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100" style="border-left:4px solid #f59e0b !important;">
+                <h6 class="text-muted x-small fw-black uppercase tracking-widest mb-1">Active Batches</h6>
+                <div class="h3 fw-black mb-0" id="kpiActive">@activeOrders</div>
+                <div class="text-muted x-small fw-bold mt-2">Currently in production</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-4 bg-white h-100" style="border-left:4px solid #e11d48 !important;">
+                <h6 class="text-muted x-small fw-black uppercase tracking-widest mb-1">Overdue Orders</h6>
+                <div class="h3 fw-black mb-0 @(overdueOrders > 0 ? "text-danger" : "text-success")" id="kpiOverdue">
+                    @overdueOrders
+                </div>
+                <div id="kpiOverdueLabel" class="x-small fw-bold mt-2 @(overdueOrders > 0 ? "text-danger" : "text-success")">
+                    @(overdueOrders > 0 ? overdueOrders + " past due date" : "All on schedule")
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                <div class="card-header bg-white border-0 p-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">Production Volume by Department</h5>
+                    <span class="badge bg-success-subtle text-success x-small fw-bold px-3 py-2 rounded-pill">
+                        <i class="bi bi-database-fill me-1"></i> Live DB
+                    </span>
+                </div>
+                <div class="card-body p-4">
+                    <div id="deptChartContainer" style="height:350px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 bg-white h-100">
+                <div class="card-header bg-white border-0 p-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark">Production Growth Trend</h5>
+                    <span class="badge bg-success-subtle text-success x-small fw-bold px-3 py-2 rounded-pill">
+                        <i class="bi bi-graph-up me-1"></i> 12 Months
+                    </span>
+                </div>
+                <div class="card-body p-4">
+                    <div id="trendChartContainer" style="height:350px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@section scripts {
+<script>
+    Highcharts.setOptions({
+        colors: ['#2563eb','#10b981','#f59e0b','#e11d48','#8b5cf6','#06b6d4'],
+        chart: { style: { fontFamily: "'Inter', sans-serif" } }
+    });
+
+    var deptChart, trendChart;
+
+    function buildCharts(deptLabels, deptData, trendLabels, trendData) {
+        if (deptChart)  deptChart.destroy();
+        if (trendChart) trendChart.destroy();
+
+        deptChart = Highcharts.chart('deptChartContainer', {
+            chart: { type: 'column', backgroundColor: 'transparent' },
+            title: { text: null },
+            xAxis: { categories: deptLabels, crosshair: true,
+                     labels: { style: { fontWeight:'600', color:'#64748b' } } },
+            yAxis: { min: 0, title: { text:'Volume (pcs)', style:{ fontWeight:'700' } },
+                     gridLineDashStyle:'Dash' },
+            tooltip: {
+                headerFormat: '<span style="font-size:10px;font-weight:900;text-transform:uppercase;">{point.key}</span><table>',
+                pointFormat: '<tr><td style="color:{series.color};padding:0">{series.name}: </td><td><b>{point.y:,.0f} pcs</b></td></tr>',
+                footerFormat: '</table>', shared: true, useHTML: true,
+                borderRadius: 12, borderWidth: 0, shadow: true
+            },
+            plotOptions: { column: { pointPadding: 0.2, borderWidth: 0, borderRadius: 8 } },
+            series: [{ name: 'Total Volume', data: deptData }],
+            credits: { enabled: false }
+        });
+
+        trendChart = Highcharts.chart('trendChartContainer', {
+            chart: { type: 'areaspline', backgroundColor: 'transparent' },
+            title: { text: null },
+            xAxis: { categories: trendLabels,
+                     labels: { style: { fontWeight:'600', color:'#64748b' } } },
+            yAxis: { title: { text: null }, gridLineDashStyle:'Dash' },
+            tooltip: { shared: true, borderRadius: 12, borderWidth: 0, shadow: true },
+            plotOptions: {
+                areaspline: {
+                    fillColor: { linearGradient:{x1:0,y1:0,x2:0,y2:1},
+                        stops:[[0,'rgba(16,185,129,0.4)'],[1,'rgba(16,185,129,0)']] },
+                    marker: { radius:4, lineWidth:2, lineColor:'#fff' },
+                    lineWidth: 3, color: '#10b981'
+                }
+            },
+            series: [{ name:'Monthly Output', data: trendData }],
+            credits: { enabled: false }
+        });
+    }
+
+    // Initial render with server data
+    buildCharts(
+        @Html.Raw(ViewBag.DeptLabels  ?? "[]"),
+        @Html.Raw(ViewBag.DeptData    ?? "[]"),
+        @Html.Raw(ViewBag.TrendLabels ?? "[]"),
+        @Html.Raw(ViewBag.TrendData   ?? "[]")
+    );
+
+    function refreshAnalytics() {
+        var btn = document.getElementById('btnRefresh');
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin me-1"></i> Syncing...';
+        btn.disabled = true;
+
+        $.getJSON('@Url.Action("GetAnalyticsKpis", "Reports")', function(d) {
+            // Update KPI cards
+            $('#kpiThroughput').html(parseInt(d.totalThroughput).toLocaleString() + ' <span class="text-muted x-small fw-normal">pcs</span>');
+            $('#kpiOtd').text(parseFloat(d.otdRate).toFixed(1) + '%');
+            $('#kpiOtdLabel')
+                .text(d.otdRate >= 90 ? 'Above target' : 'Below target')
+                .removeClass('text-success text-warning')
+                .addClass(d.otdRate >= 90 ? 'text-success' : 'text-warning');
+            $('#kpiActive').text(d.activeOrders);
+            $('#kpiOverdue')
+                .text(d.overdueOrders)
+                .removeClass('text-danger text-success')
+                .addClass(d.overdueOrders > 0 ? 'text-danger' : 'text-success');
+            $('#kpiOverdueLabel')
+                .text(d.overdueOrders > 0 ? d.overdueOrders + ' past due date' : 'All on schedule')
+                .removeClass('text-danger text-success')
+                .addClass(d.overdueOrders > 0 ? 'text-danger' : 'text-success');
+            $('#lastSyncTime').text(d.lastRefresh);
+
+            // Rebuild charts with fresh data
+            buildCharts(d.deptLabels, d.deptData, d.trendLabels, d.trendData);
+
+        }).always(function() {
+            btn.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Refresh';
+            btn.disabled = false;
+        });
+    }
+
+    // Auto-refresh every 60 seconds
+    setInterval(refreshAnalytics, 60000);
+</script>
+<style>
+    @@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; display: inline-block; }
+</style>
+}

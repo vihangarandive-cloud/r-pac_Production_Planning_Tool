@@ -1,0 +1,86 @@
+
+@model RPACProductionPlanner.Models.ProductionOrder
+@{
+    ViewBag.Title = "New Production Order";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4">
+            <div class="card-header bg-white border-bottom p-4">
+                <h5 class="mb-0 fw-bold">Order Specification</h5>
+            </div>
+            <div class="card-body p-4">
+                @if (ViewBag.Error != null) {
+                    <div class="alert alert-danger">@ViewBag.Error</div>
+                }
+
+                @using (Html.BeginForm()) {
+                    @Html.AntiForgeryToken()
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">SAP Sales Order #</label>
+                            @Html.TextBoxFor(m => m.SalesOrderNo, new { @class = "form-control", placeholder = "e.g. SO-9901" })
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Customer Name</label>
+                            @Html.TextBoxFor(m => m.CustomerName, new { @class = "form-control", placeholder = "As per SAP B1" })
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Internal Reference</label>
+                            @Html.TextBoxFor(m => m.OrderCode, new { @class = "form-control", placeholder = "Manual Ref" })
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Product / Label Name</label>
+                            @Html.TextBoxFor(m => m.ProductName, new { @class = "form-control", placeholder = "Finish good item" })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Production Department</label>
+                            @Html.DropDownListFor(m => m.Department, new SelectList(new[] { "Thermal", "Flexo", "PFL", "Heat Transfer", "RFID", "Offset", "Digital" }), "-- Select Department --", new { @class = "form-select" })
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Quantity</label>
+                            @Html.TextBoxFor(m => m.Quantity, new { @class = "form-control", type = "number" })
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Unit</label>
+                            @Html.DropDownListFor(m => m.UnitOfMeasure, new SelectList(new[] { "PCS", "KG", "Rolls", "Meters" }), new { @class = "form-select" })
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold">Priority</label>
+                            @Html.DropDownListFor(m => m.Priority, new SelectList(new[] { "Low", "Medium", "High", "Urgent" }), new { @class = "form-select" })
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Planned Start</label>
+                            @Html.TextBoxFor(m => m.PlannedStart, new { @class = "form-control", type = "datetime-local" })
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Planned End</label>
+                            @Html.TextBoxFor(m => m.PlannedEnd, new { @class = "form-control", type = "datetime-local" })
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold">Notes / Special Instructions</label>
+                        @Html.TextAreaFor(m => m.Notes, new { @class = "form-control", rows = 3 })
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 border-top pt-4">
+                        <a href="@Url.Action("Index")" class="btn btn-light border px-4">Cancel</a>
+                        <button type="submit" class="btn btn-primary px-4">Create Work Order</button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

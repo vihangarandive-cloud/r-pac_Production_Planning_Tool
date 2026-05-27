@@ -1,0 +1,517 @@
+
+@model IEnumerable<RPACProductionPlanner.Models.ProductionOrder>
+@{
+    ViewBag.Title = "Production Orders";
+    var userRole = RPACProductionPlanner.Helpers.SessionHelper.UserRole;
+    bool isManager = userRole != null && userRole.Equals("Manager", StringComparison.OrdinalIgnoreCase);
+}
+
+
+<div class="container-fluid py-4">
+    <!-- Top Stats Bar -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm rounded-5 border h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 bg-danger bg-opacity-10 text-danger rounded me-3">
+                        <i class="bi bi-list-task fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-0 text-uppercase">Work Tickets</p>
+                        <h3 class="fw-bold mb-0" id="workTicketsCount">@Model.Count()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm rounded-5 border h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 bg-primary bg-opacity-10 text-primary rounded me-3">
+                        <i class="bi bi-clock fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-0 text-uppercase">Avg. Lead Time</p>
+                        <h3 class="fw-bold mb-0">10 Days</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm rounded-5 border h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 bg-warning bg-opacity-10 text-warning rounded me-3">
+                        <i class="bi bi-exclamation-circle fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-0 text-uppercase">Urgent Orders</p>
+                        <h3 class="fw-bold mb-0" id="urgentOrdersCount">@Model.Count(m => m.Priority == "Urgent")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm rounded-5 border h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="p-3 bg-success bg-opacity-10 text-success rounded me-3">
+                        <i class="bi bi-graph-up fs-4"></i>
+                    </div>
+                    <div>
+                        <p class="text-muted small fw-bold mb-0 text-uppercase">OTD Rate</p>
+                        <h3 class="fw-bold mb-0">94.8%</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="card shadow-sm border">
+        <div class="card-header bg-white py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <h5 class="fw-bold mb-0">
+                    <i class="bi bi-grid-3x3-gap me-2"></i>
+                    <span id="deptTitle">@(ViewBag.CurrentDept ?? "All Departments")</span> - Sales Orders
+                </h5>
+                <div class="d-flex gap-2">
+                    <div class="input-group input-group-sm" style="width: 250px;">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search"></i></span>
+                        <input type="text" id="orderSearch" class="form-control bg-light border-start-0" placeholder="Search orders...">
+                    </div>
+                    @if (!isManager) {
+                        <button onclick="syncSAP(event)" class="btn btn-outline-danger btn-sm fw-bold">
+                            <i class="bi bi-arrow-repeat me-1"></i> Sync SAP
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+        
+        <!-- Order List -->
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="ordersTable">
+                <thead class="table-light">
+                    <tr class="small text-muted text-uppercase fw-bold">
+                        <th class="ps-4 py-3">Order Details</th>
+                        <th class="py-3">Order Date</th>
+                        <th class="py-3">Customer & Description</th>
+                        <th class="py-3 text-center">Order Quantity</th>
+                        <th class="py-3">Planned Date</th>
+                        <th class="py-3">Status & Priority</th>
+                        <th class="py-3 text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ordersTableBody">
+                    @Html.Partial("_OrdersTable", Model)
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Footer / Pagination -->
+        <div class="card-footer bg-light py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="small text-muted" id="paginationInfo">
+                    Showing 0 of 0 entries
+                </div>
+                <nav aria-label="Page navigation">
+                    <ul class="pagination pagination-sm mb-0" id="paginationControls">
+                        <!-- Controls injected here -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+    </div>
+</div>
+
+@section scripts {
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+    let allOrders = @Html.Raw(Newtonsoft.Json.JsonConvert.SerializeObject(Model));
+
+    // Track the active department so page refreshes land back on the same tab
+    let currentDept = '@(ViewBag.CurrentDept ?? "Thermal")';
+
+    window.loadDepartment = function(dept) {
+        currentDept = dept; // keep in sync whenever the user switches tabs
+
+        // Update Title Header
+        const displayDept = dept || "All Departments";
+        $("#deptTitle").text(displayDept + " - Sales Order Hub");
+        
+        $("#ordersTableBody").css('opacity', '0.5');
+        
+        $.get('@Url.Action("GetOrdersPartial")', { dept: dept }, function(html) {
+            $("#ordersTableBody").html(html).css('opacity', '1');
+            
+            // Re-initialize pagination and search for the new data
+            allRows = $("#ordersTableBody tr").toArray();
+            currentPage = 1;
+            applyFilterAndPagination();
+            
+            // Dynamic count calculation for department counters
+            let totalCount = allRows.length;
+            let urgentCount = 0;
+            allRows.forEach(row => {
+                let badgeText = $(row).find('.badge').text().trim().toUpperCase();
+                if (badgeText === 'URGENT') {
+                    urgentCount++;
+                }
+            });
+            $("#workTicketsCount").text(totalCount);
+            $("#urgentOrdersCount").text(urgentCount);
+
+            console.log("Department " + dept + " synchronized.");
+        });
+    }
+
+    // Helper: reload the page while keeping the current department active
+    function reloadKeepingDept() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('dept', currentDept);
+        window.location.href = url.toString();
+    }
+
+    function closeBoardDetails() { $("#boardDetailPanel").hide(); }
+
+    function updateStatus(id, status) {
+        const token = $('input[name="__RequestVerificationToken"]').val();
+        $.post('@Url.Action("UpdateStatus")', { 
+            __RequestVerificationToken: token,
+            id: id, 
+            status: status 
+        }, function(res) {
+            if (res.success) reloadKeepingDept();
+        });
+    }
+
+    function syncSAP(event) {
+            const btn = event.currentTarget;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin me-2"></i> Syncing...';
+        btn.disabled = true;
+
+        $.post('@Url.Action("SyncSAP", "ProductionOrder")', function(res) {
+            if (res.success) {
+                location.reload();
+            } else {
+                alert("Sync failed. Please check SAP B1 connection.");
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+            }
+        });
+    }
+
+    let currentPage = 1;
+    const pageSize = 20;
+    let allRows = [];
+
+    $(document).ready(function() {
+        allRows = $("#ordersTable tbody tr").toArray();
+        applyFilterAndPagination();
+
+        $("#orderSearch").on("keyup", function() {
+            currentPage = 1;
+            applyFilterAndPagination();
+        });
+    });
+
+    function applyFilterAndPagination() {
+        const searchTerm = $("#orderSearch").val().toLowerCase();
+        
+        const filteredRows = allRows.filter(row => {
+            return $(row).text().toLowerCase().indexOf(searchTerm) > -1;
+        });
+
+        const totalItems = filteredRows.length;
+        const totalPages = Math.ceil(totalItems / pageSize);
+        
+        if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+
+        // Hide all, then show only the ones for current page
+        $("#ordersTable tbody tr").hide();
+        
+        const start = (currentPage - 1) * pageSize;
+        const end = Math.min(start + pageSize, totalItems);
+        
+        for (let i = start; i < end; i++) {
+            $(filteredRows[i]).show();
+        }
+
+        // Update Info text
+        $("#paginationInfo").text(`Showing ${totalItems > 0 ? start + 1 : 0} to ${end} of ${totalItems} entries`);
+
+        // Render controls
+        renderPaginationControls(totalPages);
+    }
+
+    function renderPaginationControls(totalPages) {
+        const container = $("#paginationControls");
+        container.empty();
+
+        if (totalPages <= 1) return;
+
+        // Previous Button
+        container.append(`
+            <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a class="page-link border-0 rounded-2 shadow-sm" href="javascript:void(0)" onclick="changePage(${currentPage - 1})"><i class="bi bi-chevron-left"></i></a>
+            </li>
+        `);
+
+        // Page Numbers
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                container.append(`
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link border-0 rounded-2 shadow-sm fw-bold" href="javascript:void(0)" onclick="changePage(${i})">${i}</a>
+                    </li>
+                `);
+            } else if (i === currentPage - 2 || i === currentPage + 2) {
+                container.append(`<li class="page-item disabled"><span class="page-link border-0 bg-transparent">...</span></li>`);
+            }
+        }
+
+        // Next Button
+        container.append(`
+            <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a class="page-link border-0 rounded-2 shadow-sm" href="javascript:void(0)" onclick="changePage(${currentPage + 1})"><i class="bi bi-chevron-right"></i></a>
+            </li>
+        `);
+    }
+
+    function changePage(page) {
+        currentPage = page;
+        applyFilterAndPagination();
+    }
+
+    function openQuickSchedule(code) {
+        const isManager = @(isManager ? "true" : "false");
+        if (isManager) {
+            Swal.fire({
+                title: 'Read Only Access',
+                text: 'Managers are not authorized to amend production schedules.',
+                icon: 'info',
+                confirmButtonColor: '#e11d48'
+            });
+            return;
+        }
+
+        $("#quickOrderCode").val(code);
+        $("#quickOrderDisplay").text(code);
+        
+        // Initialize times rounded up to 10 mins
+        const now = new Date();
+        const start = new Date(Math.ceil(now.getTime() / (1000 * 60 * 10)) * (1000 * 60 * 10));
+        
+        setQuickPicker('qStart', start);
+        setQuickPicker('qEnd', new Date(start.getTime() + (4 * 60 * 60 * 1000)));
+        
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickScheduleModal'));
+        modal.show();
+    }
+
+    function setQuickPicker(prefix, date) {
+        $(`#${prefix}Date`).val(date.toISOString().split('T')[0]);
+        let hours = date.getHours();
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        $(`#${prefix}Hour`).val(hours);
+        $(`#${prefix}Min`).val(Math.floor(date.getMinutes() / 10) * 10);
+        $(`#${prefix}Ampm`).val(ampm);
+    }
+
+    function getQuickPickerValue(prefix) {
+        const dateStr = $(`#${prefix}Date`).val();
+        let hour = parseInt($(`#${prefix}Hour`).val());
+        const min = parseInt($(`#${prefix}Min`).val());
+        const ampm = $(`#${prefix}Ampm`).val();
+        
+        if (ampm === 'PM' && hour < 12) hour += 12;
+        if (ampm === 'AM' && hour === 12) hour = 0;
+        
+        const dt = new Date(dateStr);
+        dt.setHours(hour, min, 0, 0);
+        return dt.toISOString();
+    }
+
+    function formatDateForInput(date) {
+        const offset = date.getTimezoneOffset();
+        const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+        return adjustedDate.toISOString().slice(0, 16);
+    }
+
+    function submitQuickSchedule(event) {
+        const orderCode = $("#quickOrderCode").val();
+        const machineId = $("#quickMachineId").val();
+        const startTime = getQuickPickerValue('qStart');
+        const endTime = getQuickPickerValue('qEnd');
+        const priority = $("#quickPriority").val();
+        
+        if (!machineId || !startTime || !endTime) {
+            alert("Please complete all schedule details.");
+            return;
+        }
+
+        const btn = event.currentTarget || event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat animate-spin me-2"></i> Scheduling...';
+        btn.disabled = true;
+
+        const token = $('input[name="__RequestVerificationToken"]').val();
+
+        $.post('@Url.Action("UpdatePlanning", "ProductionOrder")', { 
+            __RequestVerificationToken: token,
+            orderCode: orderCode, 
+            machineId: machineId, 
+            startTime: startTime,
+            endTime: endTime,
+            priority: priority
+        }, function(res) {
+            if(res.success) {
+                bootstrap.Modal.getInstance(document.getElementById('quickScheduleModal')).hide();
+                Swal.fire({
+                    toast: true, position: 'top-end', icon: 'success',
+                    title: 'Order ' + orderCode + ' scheduled!',
+                    showConfirmButton: false, timer: 1800
+                }).then(() => reloadKeepingDept());
+            } else {
+                alert("Error: " + (res.message || "Could not schedule order"));
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }).fail(function() {
+            alert("Network error. Check connection.");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    function syncQuickTimes() {
+        const start = new Date(getQuickPickerValue('qStart'));
+        if (!isNaN(start)) {
+            const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
+            setQuickPicker('qEnd', end);
+        }
+    }
+
+    function updateQuickEndTime() {
+        const startVal = $("#quickStartTime").val();
+        if (startVal) {
+            const start = new Date(startVal);
+            if (!isNaN(start)) {
+                // Ensure start time is rounded up to 10 mins
+                const roundedStart = new Date(Math.ceil(start.getTime() / (1000 * 60 * 10)) * (1000 * 60 * 10));
+                $("#quickStartTime").val(formatDateForInput(roundedStart));
+                
+                const end = new Date(roundedStart.getTime() + (4 * 60 * 60 * 1000));
+                $("#quickEndTime").val(formatDateForInput(end));
+            }
+        }
+    }
+</script>
+
+<!-- Quick Schedule Modal -->
+<div class="modal fade" id="quickScheduleModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-dark text-white p-4">
+                <h5 class="modal-title fw-black uppercase tracking-widest fs-5">
+                    <i class="bi bi-calendar-plus-fill me-2 text-rpac-red"></i> Quick Schedule: <span id="quickOrderDisplay"></span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <input type="hidden" id="quickOrderCode" />
+                
+                <div class="mb-4">
+                    <label class="form-label fw-black uppercase tracking-widest text-muted small mb-2">Target Machine</label>
+                    <div class="input-group shadow-sm rounded-3 overflow-hidden">
+                        <span class="input-group-text border-0 bg-white"><i class="bi bi-cpu text-primary"></i></span>
+                        <select id="quickMachineId" class="form-select border-0 bg-white py-3 fw-bold text-dark fs-6">
+                            <option value="">Choose Machine...</option>
+                            @if (ViewBag.Machines != null) {
+                                foreach (var m in (IEnumerable<RPACProductionPlanner.Models.MachineResource>)ViewBag.Machines) {
+                                    <option value="@m.MachineId" @(m.Status != "Available" ? "class=text-danger style=font-weight:bold" : "")>
+                                        @m.MachineName (@m.Department) @(m.Status != "Available" ? "[BREAKDOWN]" : "")
+                                    </option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Planned Start Time -->
+                <div class="mb-4">
+                    <label class="form-label fw-black uppercase tracking-widest text-muted small mb-2">Planned Start Time</label>
+                    <div class="d-flex gap-1 bg-white p-2 rounded-3 shadow-sm border">
+                        <input type="date" id="qStartDate" class="form-control border-0 bg-transparent fw-bold fs-6" style="width: 165px;" onchange="syncQuickTimes()" />
+                        <select id="qStartHour" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 75px;" onchange="syncQuickTimes()">
+                            @for(int i=1; i<=12; i++) { <option value="@i">@i.ToString("D2")</option> }
+                        </select>
+                        <select id="qStartMin" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 75px;" onchange="syncQuickTimes()">
+                            @for(int i=0; i<60; i+=10) { <option value="@i">@i.ToString("D2")</option> }
+                        </select>
+                        <select id="qStartAmpm" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 85px;" onchange="syncQuickTimes()">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Planned End Time -->
+                <div class="mb-4">
+                    <label class="form-label fw-black uppercase tracking-widest text-muted small mb-2">Planned End Time</label>
+                    <div class="d-flex gap-1 bg-white p-2 rounded-3 shadow-sm border">
+                        <input type="date" id="qEndDate" class="form-control border-0 bg-transparent fw-bold fs-6" style="width: 165px;" />
+                        <select id="qEndHour" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 75px;">
+                            @for(int i=1; i<=12; i++) { <option value="@i">@i.ToString("D2")</option> }
+                        </select>
+                        <select id="qEndMin" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 75px;">
+                            @for(int i=0; i<60; i+=10) { <option value="@i">@i.ToString("D2")</option> }
+                        </select>
+                        <select id="qEndAmpm" class="form-select border-0 bg-transparent fw-bold fs-6 px-1" style="width: 85px;">
+                            <option>AM</option><option>PM</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label fw-black uppercase tracking-widest text-muted small mb-2">Priority Level</label>
+                    <div class="input-group shadow-sm rounded-3 overflow-hidden border">
+                        <span class="input-group-text border-0 bg-white"><i class="bi bi-flag-fill text-rpac-red"></i></span>
+                        <select id="quickPriority" class="form-select border-0 bg-white py-3 fw-bold text-dark fs-6">
+                            <option value="N/A" selected>N/A</option>
+                            <option value="Normal">Normal</option>
+                            <option value="Urgent">Urgent</option>
+                            <option value="High">High</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                </div>
+
+                <p class="text-xxs text-muted mt-3 mb-0">
+                    <i class="bi bi-info-circle me-1"></i> Once scheduled, this order will appear on the Gantt chart where you can drag and extend its duration.
+                </p>
+            </div>
+            <div class="modal-footer border-0 p-4 bg-white">
+                <button type="button" class="btn btn-light text-dark fw-bold px-4 rounded-3 border-0" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-rpac-red text-black fw-black px-4 py-2 rounded-3 text-uppercase tracking-widest shadow-sm" onclick="submitQuickSchedule(event)">Schedule Order</button>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+    .cursor-pointer { cursor: pointer; }
+    .hover-scale-sm { transition: transform 0.2s; }
+    .hover-scale-sm:hover { transform: scale(1.02); text-decoration: underline; }
+</style>
+}

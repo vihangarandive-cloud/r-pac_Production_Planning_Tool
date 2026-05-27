@@ -1,0 +1,94 @@
+@model IEnumerable<RPACProductionPlanner.Models.ProductionOrder>
+@{
+    var userRole = RPACProductionPlanner.Helpers.SessionHelper.UserRole;
+    bool isManager = userRole != null && userRole.Equals("Manager", StringComparison.OrdinalIgnoreCase);
+}
+
+@foreach (var item in Model) {
+    <tr class="border-bottom group hover-bg-light transition-all" data-dept="@item.Department">
+        <td class="ps-4 py-3">
+            <div class="d-flex align-items-center">
+                <div>
+                    <div class="fw-black text-rpac-red fs-5 tracking-tight fw-bold mb-0 cursor-pointer hover-scale-sm" onclick="openQuickSchedule('@item.OrderCode')" title="Click to Quick Schedule">@item.OrderCode</div>
+                    <div class="d-flex gap-2">
+                        <span class="text-xxs text-muted fw-bold uppercase tracking-widest opacity-60">PO: @item.SalesOrderNo</span>
+                    </div>
+                </div>
+            </div>
+        </td>
+        <td class="py-2">
+            <div class="x-small fw-black text-dark uppercase tracking-tight">
+                <i class="bi bi-calendar-event text-muted me-1"></i>
+                @(item.OrderedDate.HasValue ? item.OrderedDate.Value.ToString("dd MMM yyyy") : "N/A")
+            </div>
+        </td>
+        <td class="py-2">
+            <div class="fw-bold text-dark small mb-1">@item.CustomerName</div>
+            <div class="badge bg-light text-muted fw-bold x-small truncate-text border-0" style="max-width: 180px;">@item.ProductName</div>
+        </td>
+        <td class="text-center py-2">
+            <div class="fw-black text-dark fs-6">@item.Quantity.ToString("N0")</div>
+            <div class="text-xxs text-muted fw-black uppercase opacity-40">PCS</div>
+        </td>
+
+        <td class="py-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-calendar-check text-rpac-red x-small"></i>
+                <div class="x-small fw-black text-dark uppercase tracking-tight">
+                    @if (item.PlannedStart.HasValue) {
+                        <div class="mb-0">@item.PlannedStart.Value.ToString("dd MMM yyyy")</div>
+                        <div class="text-rpac-red" style="font-size: 0.65rem;">@item.PlannedStart.Value.ToString("hh:mm tt")</div>
+                    } else {
+                        <span>NOT PLANNED</span>
+                    }
+                </div>
+            </div>
+        </td>
+        <td class="py-2">
+            <div class="mb-1">
+                @{
+                    string sColor = item.Status == "In Progress" ? "text-success" : 
+                                    item.Status == "Quality Check" ? "text-primary" :
+                                    item.Status == "Hold" ? "text-danger" : "text-muted";
+                }
+                <span class="x-small fw-black uppercase tracking-widest @sColor">
+                    <i class="bi bi-circle-fill me-1 x-small opacity-50"></i> @(item.Status ?? "New")
+                </span>
+            </div>
+            @{
+                string displayPriority = string.IsNullOrEmpty(item.Priority) ? "N/A" : item.Priority;
+                string priorityColor = displayPriority.ToUpper() == "URGENT" || displayPriority.ToUpper() == "HIGH" ? "bg-danger text-white" : 
+                                     displayPriority.ToUpper() == "NORMAL" || displayPriority.ToUpper() == "MEDIUM" ? "bg-primary text-white" : 
+                                     displayPriority.ToUpper() == "LOW" ? "bg-warning text-dark" : 
+                                     "bg-secondary text-white";
+            }
+            <span class="badge @priorityColor border-0 rounded-pill px-2 py-1 text-xxs fw-black uppercase tracking-widest opacity-75">
+                @displayPriority
+            </span>
+        </td>
+        <td class="text-end pe-4 py-2">
+            <div class="d-flex justify-content-end gap-2 transition-all">
+                <a href="@Url.Action("Details", new { id = item.OrderCode })" class="btn btn-light bg-transparent border-0 shadow-none rounded-3 hover-shadow">
+                    <i class="bi bi-arrows-fullscreen text-dark fs-6"></i>
+                </a>
+                @if (!isManager) {
+                    <div class="dropdown">
+                        <button class="btn btn-light bg-transparent border-0 shadow-none rounded-3 hover-shadow no-caret" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear-fill text-dark fs-6"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-4 p-2 animate-fade-in">
+                            <li class="px-3 py-2"><h6 class="dropdown-header x-small text-uppercase tracking-widest fw-black p-0">Action Hub</h6></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold py-2 @(item.OrderCode.StartsWith("260") ? "text-primary bg-primary bg-opacity-10" : "")" href="javascript:void(0)" onclick="openQuickSchedule('@item.OrderCode')"><i class="bi bi-calendar-plus-fill me-2 fs-6"></i>Quick Schedule</a></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold py-2" href="javascript:void(0)" onclick="updateStatus('@item.OrderCode', 'In Progress')"><i class="bi bi-play-fill text-success me-2 fs-6"></i>Release to Floor</a></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold py-2" href="javascript:void(0)" onclick="updateStatus('@item.OrderCode', 'Normal')"><i class="bi bi-arrow-counterclockwise text-muted me-2 fs-6"></i>Reset to Normal</a></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold py-2" href="javascript:void(0)" onclick="updateStatus('@item.OrderCode', 'Quality Check')"><i class="bi bi-shield-check text-primary me-2 fs-6"></i>QC Trigger</a></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold py-2" href="javascript:void(0)" onclick="updateStatus('@item.OrderCode', 'Completed')"><i class="bi bi-check-circle-fill text-dark me-2 fs-6"></i>Complete SO</a></li>
+                            <li><hr class="dropdown-divider mx-2"></li>
+                            <li><a class="dropdown-item rounded-3 x-small fw-bold text-danger py-2" href="javascript:void(0)" onclick="updateStatus('@item.OrderCode', 'Hold')"><i class="bi bi-pause-circle-fill me-2 fs-6"></i>Production Hold</a></li>
+                        </ul>
+                    </div>
+                }
+            </div>
+        </td>
+    </tr>
+}
