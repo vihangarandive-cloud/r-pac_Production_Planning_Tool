@@ -1,4 +1,3 @@
-// /Services/NotificationService.cs
 using RPACProductionPlanner.Models;
 using RPACProductionPlanner.Repositories;
 using Dapper;
@@ -22,24 +21,19 @@ namespace RPACProductionPlanner.Services
 
         public void ProcessAlerts()
         {
-            // 1. Thread-safe check to prevent overlapping runs and respect cooldown
             lock (_lock)
             {
                 if (_isRunning) return;
-                
+
                 if (_lastRunTime.HasValue && System.DateTime.Now.Subtract(_lastRunTime.Value).TotalMinutes < 15)
-                {
                     return;
-                }
-                
-                // Mark as running and update last run time immediately to block other threads
+
                 _isRunning = true;
                 _lastRunTime = System.DateTime.Now;
             }
 
             try
             {
-                // 2. Perform DB work (Outside the lock to keep it non-blocking)
                 var lowStockItems = _inventoryRepo.GetLowStockItems();
                 using (var conn = Helpers.MSSQLHelper.GetConnection())
                 {
@@ -48,13 +42,13 @@ namespace RPACProductionPlanner.Services
                         string checkSql = "SELECT TOP 1 1 FROM AlertNotifications WITH (NOLOCK) WHERE AlertType = 'Low Stock' AND RelatedId = @RelatedId AND IsRead = 0";
                         if (conn.ExecuteScalar<int?>(checkSql, new { RelatedId = item.ItemId }) == null)
                         {
-                            string message = $"Low stock alert: {item.ItemName} ({item.ItemCode}) is at {item.QuantityOnHand} {item.UnitOfMeasure}.";
+                            string message = $"Low stock: {item.ItemName} ({item.ItemCode}) is at {item.QuantityOnHand} {item.UnitOfMeasure}.";
                             _notificationRepo.CreateAlert("Low Stock", message, item.ItemId);
                         }
                     }
 
                     string sql = @"SELECT * FROM ProductionOrders WITH (NOLOCK)
-                                   WHERE PlannedEnd < GETDATE() 
+                                   WHERE PlannedEnd < GETDATE()
                                    AND Status NOT IN ('Completed', 'Cancelled')";
                     var overdueOrders = conn.Query<Models.ProductionOrder>(sql);
 
@@ -63,7 +57,7 @@ namespace RPACProductionPlanner.Services
                         string checkSql = "SELECT TOP 1 1 FROM AlertNotifications WITH (NOLOCK) WHERE AlertType = 'Overdue' AND RelatedId = @RelatedId AND IsRead = 0";
                         if (conn.ExecuteScalar<int?>(checkSql, new { RelatedId = order.OrderId }) == null)
                         {
-                            string message = $"Overdue order alert: {order.OrderCode} ({order.ProductName}) was planned to end on {order.PlannedEnd:MMM dd, HH:mm}.";
+                            string message = $"Overdue: {order.OrderCode} ({order.ProductName}) was due on {order.PlannedEnd:MMM dd, HH:mm}.";
                             _notificationRepo.CreateAlert("Overdue", message, order.OrderId);
                         }
                     }
@@ -71,11 +65,10 @@ namespace RPACProductionPlanner.Services
             }
             catch
             {
-                // Silent fail for background tasks
+                // Background task — errors are non-critical
             }
             finally
             {
-                // 3. Always reset the running flag
                 lock (_lock)
                 {
                     _isRunning = false;

@@ -17,6 +17,10 @@ obj/
 packages/
 !packages/build/
 
+# Publish profiles (machine-specific)
+*.pubxml
+*.pubxml.user
+
 # Logs
 *.log
 
@@ -24,10 +28,7 @@ packages/
 .DS_Store
 Thumbs.db
 
-## Node / Web
+## Node / Web (included for completeness)
 node_modules/
-build/
-dist/
-coverage/
 .env*
 !.env.example

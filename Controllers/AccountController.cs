@@ -1,4 +1,3 @@
-// /Controllers/AccountController.cs
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,7 +24,8 @@ namespace RPACProductionPlanner.Controllers
             {
                 FormsAuthentication.SignOut();
                 SessionHelper.Clear();
-                HttpContext.User = new System.Security.Principal.GenericPrincipal(new System.Security.Principal.GenericIdentity(""), null);
+                HttpContext.User = new System.Security.Principal.GenericPrincipal(
+                    new System.Security.Principal.GenericIdentity(""), null);
             }
             return View();
         }
@@ -43,19 +43,17 @@ namespace RPACProductionPlanner.Controllers
             string cleanUsername = username.Trim();
             string cleanPassword = password.Trim();
 
-            try 
+            try
             {
-                // 1. Get user by username
                 var user = await _userRepo.GetUserByUsernameAsync(cleanUsername);
-                
+
                 if (user != null)
                 {
-                    // 2. Verify password (Checking both new secure hash and legacy plain text/SHA256 for transition)
                     bool isValid = SecurityHelper.VerifyPassword(cleanPassword, user.PasswordHash);
-                    
+
                     if (!isValid)
                     {
-                        // Legacy fallback for transition
+                        // Fallback check for accounts that haven't migrated to the new hash format yet
                         string oldHash = GetSha256Hash(cleanPassword);
                         isValid = (user.PasswordHash == oldHash || user.PasswordHash == cleanPassword);
                     }
@@ -76,7 +74,7 @@ namespace RPACProductionPlanner.Controllers
             }
             catch (Exception ex)
             {
-                ViewBag.Error = "CONNECTION ERROR: " + ex.Message;
+                ViewBag.Error = "Connection error: " + ex.Message;
             }
 
             return View();

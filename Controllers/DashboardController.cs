@@ -1,4 +1,3 @@
-// /Controllers/DashboardController.cs
 using System.Web.Mvc;
 using RPACProductionPlanner.Helpers;
 using RPACProductionPlanner.Repositories;
@@ -13,7 +12,10 @@ namespace RPACProductionPlanner.Controllers
         private readonly SchedulerService _schedulerService;
         private readonly NotificationService _notificationService;
 
-        public DashboardController(IProductionOrderRepository orderRepo, SchedulerService schedulerService, NotificationService notificationService)
+        public DashboardController(
+            IProductionOrderRepository orderRepo,
+            SchedulerService schedulerService,
+            NotificationService notificationService)
         {
             _orderRepo = orderRepo;
             _schedulerService = schedulerService;
@@ -25,13 +27,10 @@ namespace RPACProductionPlanner.Controllers
             ViewBag.ActiveModule = "Dashboard";
             ViewBag.UserRole = SessionHelper.UserRole;
 
-            // Process alerts in the background (fire-and-forget, intentionally not awaited)
+            // Fire alert processing in the background without blocking the page load
             _ = System.Threading.Tasks.Task.Run(() => _notificationService.ProcessAlerts());
-            
-            // Get live KPIs (cache removed for absolute real-time sync as requested)
+
             var kpis = await _orderRepo.GetDashboardKPIsAsync();
-            
-            // Get machine list for the status matrix
             var machines = _schedulerService.GetMachines();
             ViewBag.Machines = machines;
 

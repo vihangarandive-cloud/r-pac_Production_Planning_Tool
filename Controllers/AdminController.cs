@@ -1,4 +1,3 @@
-// /Controllers/AdminController.cs
 using System.Web.Mvc;
 using RPACProductionPlanner.Helpers;
 using RPACProductionPlanner.Repositories;
@@ -31,9 +30,8 @@ namespace RPACProductionPlanner.Controllers
         [ValidateAntiForgeryToken]
         public ActionResult AddUser(string FullName, string Username, string Role, string Password)
         {
-            try 
+            try
             {
-                // 2: Planner, 3: Shift Executive, 4: Manager, 1: Admin
                 int roleId = Role == "Planner" ? 2 : Role == "ShiftExecutive" ? 3 : Role == "Manager" ? 4 : 1;
                 var user = new RPACProductionPlanner.Models.UserAccount
                 {

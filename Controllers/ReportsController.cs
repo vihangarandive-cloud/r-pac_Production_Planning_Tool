@@ -1,4 +1,3 @@
-// /Controllers/ReportsController.cs
 using System;
 using System.Web.Mvc;
 using RPACProductionPlanner.Helpers;
@@ -15,7 +14,10 @@ namespace RPACProductionPlanner.Controllers
         private readonly IProductionOrderRepository _orderRepo;
         private readonly IInventoryRepository _inventoryRepo;
 
-        public ReportsController(IReportRepository reportRepo, IProductionOrderRepository orderRepo, IInventoryRepository inventoryRepo)
+        public ReportsController(
+            IReportRepository reportRepo,
+            IProductionOrderRepository orderRepo,
+            IInventoryRepository inventoryRepo)
         {
             _reportRepo = reportRepo;
             _orderRepo = orderRepo;
@@ -25,24 +27,22 @@ namespace RPACProductionPlanner.Controllers
         public ActionResult Index()
         {
             ViewBag.ActiveModule = "Reports";
-            
+
             var deptVolume = _reportRepo.GetDepartmentVolume().ToList();
             var monthlyTrend = _reportRepo.GetMonthlyTrend().ToList();
 
             ViewBag.DeptLabels = JsonConvert.SerializeObject(deptVolume.Select(x => Convert.ToString(x.Department)));
             ViewBag.DeptData = JsonConvert.SerializeObject(deptVolume.Select(x => Convert.ToDecimal(x.Volume)));
-
             ViewBag.TrendLabels = JsonConvert.SerializeObject(monthlyTrend.Select(x => Convert.ToString(x.Month)));
             ViewBag.TrendData = JsonConvert.SerializeObject(monthlyTrend.Select(x => Convert.ToDecimal(x.Volume)));
-            
-            // Initial KPI data (will also be refreshed live via AJAX)
+
             var kpiData = _reportRepo.GetAnalyticsKpis();
             ViewBag.TotalThroughput = kpiData.TotalThroughput;
             ViewBag.TotalOrders = kpiData.TotalOrders;
             ViewBag.ActiveOrders = kpiData.ActiveOrders;
             ViewBag.OverdueOrders = kpiData.OverdueOrders;
             ViewBag.OtdRate = kpiData.OtdRate;
-            
+
             return View();
         }
 
@@ -52,7 +52,9 @@ namespace RPACProductionPlanner.Controllers
             var kpi = _reportRepo.GetAnalyticsKpis();
             var deptVolume = _reportRepo.GetDepartmentVolume().ToList();
             var monthlyTrend = _reportRepo.GetMonthlyTrend().ToList();
-            return Json(new {
+
+            return Json(new
+            {
                 totalThroughput = kpi.TotalThroughput,
                 totalOrders = kpi.TotalOrders,
                 activeOrders = kpi.ActiveOrders,
@@ -66,22 +68,24 @@ namespace RPACProductionPlanner.Controllers
             }, JsonRequestBehavior.AllowGet);
         }
 
-
         [HttpGet]
         public ActionResult ExportProductionSchedule()
         {
             var orders = _orderRepo.GetAll();
-            
+
             var csv = new System.Text.StringBuilder();
             csv.AppendLine("Order Code,Product,Department,Machine Name,Quantity,Status,Planned Start,Planned End");
 
             foreach (var o in orders)
             {
                 csv.AppendLine(string.Format("{0},{1},{2},{3},{4},{5},{6},{7}",
-                    o.OrderCode, o.ProductName, o.Department, o.MachineName, o.Quantity, o.Status, o.PlannedStart, o.PlannedEnd));
+                    o.OrderCode, o.ProductName, o.Department, o.MachineName,
+                    o.Quantity, o.Status, o.PlannedStart, o.PlannedEnd));
             }
 
-            return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "ProductionSchedule_" + DateTime.Now.ToString("yyyyMMdd") + ".csv");
+            return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()),
+                "text/csv",
+                "ProductionSchedule_" + DateTime.Now.ToString("yyyyMMdd") + ".csv");
         }
 
         [HttpGet]
@@ -95,10 +99,13 @@ namespace RPACProductionPlanner.Controllers
             foreach (var i in items)
             {
                 csv.AppendLine(string.Format("{0},{1},{2},{3},{4},{5}",
-                    i.ItemCode, i.ItemName, i.Category, i.QuantityOnHand, i.ReorderLevel, i.UnitOfMeasure));
+                    i.ItemCode, i.ItemName, i.Category,
+                    i.QuantityOnHand, i.ReorderLevel, i.UnitOfMeasure));
             }
 
-            return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", "InventoryReport_" + DateTime.Now.ToString("yyyyMMdd") + ".csv");
+            return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()),
+                "text/csv",
+                "InventoryReport_" + DateTime.Now.ToString("yyyyMMdd") + ".csv");
         }
     }
 }

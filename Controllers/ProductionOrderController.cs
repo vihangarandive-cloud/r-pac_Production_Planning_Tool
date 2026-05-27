@@ -1,4 +1,3 @@
-// /Controllers/ProductionOrderController.cs
 using System;
 using System.Web.Mvc;
 using RPACProductionPlanner.Helpers;
@@ -15,7 +14,10 @@ namespace RPACProductionPlanner.Controllers
         private readonly ProductionService _productionService;
         private readonly SchedulerService _schedulerService;
 
-        public ProductionOrderController(IProductionOrderRepository orderRepo, ProductionService productionService, SchedulerService schedulerService)
+        public ProductionOrderController(
+            IProductionOrderRepository orderRepo,
+            ProductionService productionService,
+            SchedulerService schedulerService)
         {
             _orderRepo = orderRepo;
             _productionService = productionService;
@@ -25,16 +27,15 @@ namespace RPACProductionPlanner.Controllers
         public async System.Threading.Tasks.Task<ActionResult> Index(string status, DateTime? start, DateTime? end, string dept = null)
         {
             ViewBag.ActiveModule = "Production";
-            
-            // Optimization: Default to "Thermal" if no department is specified to prevent loading "All" data at once
+
+            // Default to Thermal dept to avoid loading all records at once
             if (string.IsNullOrEmpty(dept))
-            {
                 dept = "Thermal";
-            }
-            
+
             ViewBag.CurrentDept = dept;
             ViewBag.Machines = _schedulerService.GetMachines();
             ViewBag.Departments = _schedulerService.GetDepartments();
+
             var orders = await _orderRepo.GetAllAsync(status, start, end, dept);
             return View(orders);
         }
@@ -59,8 +60,9 @@ namespace RPACProductionPlanner.Controllers
         {
             order.CreatedBy = SessionHelper.UserId;
             var result = _productionService.CreateOrder(order);
+
             if (result.Success) return RedirectToAction("Index");
-            
+
             ViewBag.Error = result.Message;
             return View(order);
         }
@@ -77,49 +79,56 @@ namespace RPACProductionPlanner.Controllers
         [ValidateAntiForgeryToken]
         public JsonResult UpdateStatus(string id, string status)
         {
-            // Note: GetById also needs to handle string
             var order = _orderRepo.GetByOrderCode(id);
             if (order != null)
             {
                 order.Status = status;
                 if (status == "In Progress") order.ActualStart = DateTime.Now;
                 if (status == "Completed") order.ActualEnd = DateTime.Now;
-                
+
                 _orderRepo.Update(order);
                 return Json(new { success = true });
             }
             return Json(new { success = false });
         }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public JsonResult UpdatePlanning(string orderCode, int machineId, string startTime, string endTime, string priority = "N/A")
         {
-            if (string.IsNullOrEmpty(startTime)) return Json(new { success = false, message = "Start time is required." });
-            
-            DateTime parsedStart;
-            if (!DateTime.TryParse(startTime, out parsedStart)) return Json(new { success = false, message = "Invalid start time." });
-            
-            DateTime? parsedEnd = null;
-            if (!string.IsNullOrEmpty(endTime) && DateTime.TryParse(endTime, out DateTime endDt)) {
-                parsedEnd = endDt;
-            }
+            if (string.IsNullOrEmpty(startTime))
+                return Json(new { success = false, message = "Start time is required." });
 
-            try {
+            DateTime parsedStart;
+            if (!DateTime.TryParse(startTime, out parsedStart))
+                return Json(new { success = false, message = "Invalid start time." });
+
+            DateTime? parsedEnd = null;
+            if (!string.IsNullOrEmpty(endTime) && DateTime.TryParse(endTime, out DateTime endDt))
+                parsedEnd = endDt;
+
+            try
+            {
                 var success = _orderRepo.UpdatePlanning(orderCode, machineId, parsedStart, parsedEnd, priority);
                 return Json(new { success = success });
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 return Json(new { success = false, message = ex.Message });
             }
         }
-        
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public JsonResult Unschedule(string orderCode)
         {
-            try {
+            try
+            {
                 var success = _orderRepo.Unschedule(orderCode);
-                return Json(new { success = true }); 
-            } catch (Exception ex) {
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -129,11 +138,14 @@ namespace RPACProductionPlanner.Controllers
         public JsonResult UpdateNotes(string orderCode, string notes)
         {
             if (string.IsNullOrEmpty(orderCode)) return Json(new { success = false });
-            
-            try {
+
+            try
+            {
                 var success = _orderRepo.UpdateNotes(orderCode, notes);
                 return Json(new { success = success });
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 return Json(new { success = false, message = ex.Message });
             }
         }
@@ -142,7 +154,6 @@ namespace RPACProductionPlanner.Controllers
         [ValidateAntiForgeryToken]
         public JsonResult SyncSAP()
         {
-            // Removed artificial delay
             return Json(new { success = true });
         }
     }

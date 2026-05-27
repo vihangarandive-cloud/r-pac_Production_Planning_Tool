@@ -1,7 +1,5 @@
-// /Services/SchedulerService.cs
 using System;
 using System.Collections.Generic;
-using System.Data;
 using Dapper;
 using RPACProductionPlanner.Helpers;
 using RPACProductionPlanner.Models;
@@ -40,7 +38,6 @@ namespace RPACProductionPlanner.Services
 
         public bool CheckConflicts(int machineId, DateTime start, DateTime end, int? excludeOrderId = null)
         {
-            // Placeholder for conflict logic
             return false;
         }
     }
