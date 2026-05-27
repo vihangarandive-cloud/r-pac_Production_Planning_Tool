@@ -2,8 +2,6 @@
 
 An internal web application built for R-PAC International to manage and track production orders, machine scheduling, inventory, and shift operations across departments.
 
-![Preview](Prodution Planning Tool Dashboard.png)
-
 Built with **ASP.NET MVC 5**, **SQL Server**, and **SignalR** for real-time updates.
 
 ---
